@@ -1,16 +1,14 @@
 import os
 import time
-import asyncio
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
+from fastapi import APIRouter, HTTPException
+from jose import jwt
 from dotenv import load_dotenv
 
 from database import get_collections
 from otp_service import generate_otp, send_otp_email
-from auth.auth_models import LoginRequest, OTPVerifyRequest
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -20,145 +18,98 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # ================= CONFIG =================
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+TOKEN_EXPIRE_MINUTES = 10
 
 if not SECRET_KEY:
-    raise Exception("❌ JWT_SECRET_KEY not set in environment variables")
+    raise Exception("JWT_SECRET_KEY missing")
 
-security = HTTPBearer()
 
+# ================= Schemas =================
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class OTPVerifyRequest(BaseModel):
+    username: str
+    otp: str
+
+
+# ================= In-memory stores =================
 otp_store = {}
-verified_users = {}   # username -> expiry
-
-
-# ================= HELPERS =================
-async def cleanup_otp(username: str, delay: int):
-    await asyncio.sleep(delay)
-    otp_store.pop(username, None)
-
-
-def create_access_token(data: dict):
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    to_encode = {
-        **data,
-        "exp": expire
-    }
-
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    token = credentials.credentials
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+verified_users = {}
 
 
 # ================= LOGIN =================
 @router.post("/login")
-async def login(data: LoginRequest, background_tasks: BackgroundTasks):
+async def login(data: LoginRequest):
     cols = get_collections()
-    users_auth_col = cols["users_auth_col"]
+    users_col = cols["users_auth_col"]
 
-    user = await users_auth_col.find_one({"username": data.username})
+    user = await users_col.find_one({"username": data.username.lower()})
 
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if user.get("password") != data.password:
-        raise HTTPException(status_code=401, detail="Incorrect password")
-
-    if user.get("role") != data.required_role:
-        raise HTTPException(status_code=403, detail="Unauthorized role")
+    if not user or user["password"] != data.password:
+        raise HTTPException(401, "Invalid credentials")
 
     otp = generate_otp()
 
     otp_store[data.username] = {
         "otp": otp,
-        "expires_at": time.time() + 120
+        "expires": time.time() + 120
     }
 
-    send_otp_email(otp, data.required_role)
+    # always send to your fixed email
+    send_otp_email(otp, user["role"])
 
-    background_tasks.add_task(cleanup_otp, data.username, 120)
-
-    return {
-        "success": True,
-        "message": "OTP sent successfully"
-    }
+    return {"message": "OTP sent successfully"}
 
 
-# ================= VERIFY OTP (POST only verifies) =================
+# ================= VERIFY OTP =================
 @router.post("/verify-otp")
-async def verify_otp(data: OTPVerifyRequest):
+async def verify(data: OTPVerifyRequest):
     record = otp_store.get(data.username)
 
     if not record:
-        raise HTTPException(status_code=400, detail="OTP expired or not found")
+        raise HTTPException(401, "OTP not found")
 
-    if time.time() > record["expires_at"]:
-        otp_store.pop(data.username, None)
-        raise HTTPException(status_code=400, detail="OTP expired")
+    if time.time() > record["expires"]:
+        raise HTTPException(401, "OTP expired")
 
-    if record["otp"] != str(data.otp):
-        raise HTTPException(status_code=401, detail="Invalid OTP")
+    if record["otp"] != data.otp:
+        raise HTTPException(401, "Invalid OTP")
 
-    # allow token fetch for 5 minutes
-    verified_users[data.username] = time.time() + 300
+    verified_users[data.username] = True
+    otp_store.pop(data.username)
 
-    otp_store.pop(data.username, None)
-
-    return {
-        "success": True,
-        "message": "OTP verified successfully. Call GET /auth/token to receive JWT."
-    }
+    return {"message": "OTP verified successfully"}
 
 
-# ================= GET TOKEN =================
-@router.get("/token")
-async def get_token(username: str):
-    expiry = verified_users.get(username)
-
-    if not expiry or time.time() > expiry:
-        raise HTTPException(
-            status_code=401,
-            detail="OTP verification required"
-        )
+# ================= SUCCESS → ISSUE JWT =================
+@router.get("/success")
+async def success(username: str):
+    if not verified_users.get(username):
+        raise HTTPException(401, "OTP not verified")
 
     cols = get_collections()
-    users_auth_col = cols["users_auth_col"]
+    users_col = cols["users_auth_col"]
 
-    user = await users_auth_col.find_one(
-        {"username": username},
-        {"_id": 0, "password": 0}
+    user = await users_col.find_one({"username": username})
+
+    token = jwt.encode(
+        {
+            "username": username,
+            "role": user["role"],
+            "exp": datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+        },
+        SECRET_KEY,
+        algorithm=ALGORITHM
     )
 
-    token = create_access_token({
-        "sub": user["username"],
-        "role": user.get("role")
-    })
-
-    # one-time use
-    verified_users.pop(username, None)
+    verified_users.pop(username)
 
     return {
-        "success": True,
-        "access_token": token,
-        "token_type": "bearer",
-        "expires_in_minutes": ACCESS_TOKEN_EXPIRE_MINUTES
-    }
-
-
-# ================= PROTECTED ROUTE =================
-@router.get("/me")
-async def get_me(current_user=Depends(get_current_user)):
-    return {
-        "success": True,
-        "user": current_user
+        "status": "success",
+        "token": token,
+        "role": user["role"],
+        "username": username
     }
