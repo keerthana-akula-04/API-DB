@@ -26,3 +26,8 @@ Thumbs.db
 # Mongo local DB files (if any)
 data/
 *.db
+
+venv/
+.venv/
+__pycache__/
+.env
