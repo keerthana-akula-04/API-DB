@@ -28,7 +28,7 @@ if not SECRET_KEY:
 security = HTTPBearer()
 
 otp_store = {}
-verified_users = {}
+verified_users = {}   # username -> expiry
 
 
 # ================= HELPERS =================
@@ -38,9 +38,13 @@ async def cleanup_otp(username: str, delay: int):
 
 
 def create_access_token(data: dict):
-    to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+
+    to_encode = {
+        **data,
+        "exp": expire
+    }
+
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -52,7 +56,6 @@ def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -81,7 +84,6 @@ async def login(data: LoginRequest, background_tasks: BackgroundTasks):
         "expires_at": time.time() + 120
     }
 
-    # ✅ Brevo email sending
     send_otp_email(otp, data.required_role)
 
     background_tasks.add_task(cleanup_otp, data.username, 120)
@@ -92,7 +94,7 @@ async def login(data: LoginRequest, background_tasks: BackgroundTasks):
     }
 
 
-# ================= VERIFY OTP =================
+# ================= VERIFY OTP (POST only verifies) =================
 @router.post("/verify-otp")
 async def verify_otp(data: OTPVerifyRequest):
     record = otp_store.get(data.username)
@@ -107,18 +109,18 @@ async def verify_otp(data: OTPVerifyRequest):
     if record["otp"] != str(data.otp):
         raise HTTPException(status_code=401, detail="Invalid OTP")
 
-    # allow token fetch for 5 mins
+    # allow token fetch for 5 minutes
     verified_users[data.username] = time.time() + 300
 
     otp_store.pop(data.username, None)
 
     return {
         "success": True,
-        "message": "OTP verified successfully"
+        "message": "OTP verified successfully. Call GET /auth/token to receive JWT."
     }
 
 
-# ================= GET JWT TOKEN =================
+# ================= GET TOKEN =================
 @router.get("/token")
 async def get_token(username: str):
     expiry = verified_users.get(username)
@@ -142,12 +144,14 @@ async def get_token(username: str):
         "role": user.get("role")
     })
 
+    # one-time use
     verified_users.pop(username, None)
 
     return {
         "success": True,
         "access_token": token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "expires_in_minutes": ACCESS_TOKEN_EXPIRE_MINUTES
     }
 
 
