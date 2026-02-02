@@ -8,20 +8,22 @@ load_dotenv()
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 
-# ✅ Fixed receiver (as you requested)
+# ✅ Fixed receiver (always send here)
 RECEIVER_EMAIL = "thrinethra098@gmail.com"
 
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 
 
+# ================= OTP =================
 def generate_otp() -> str:
     return str(random.randint(100000, 999999))
 
 
+# ================= SEND EMAIL =================
 def send_otp_email(otp: str, role: str) -> bool:
     """
-    Send OTP via Brevo API (NO SMTP)
-    Always sends to thrinethra098@gmail.com
+    Send OTP using Brevo REST API (NO SMTP)
+    Always sends to fixed receiver
     """
 
     if not BREVO_API_KEY or not SENDER_EMAIL:
@@ -39,9 +41,7 @@ def send_otp_email(otp: str, role: str) -> bool:
             "email": SENDER_EMAIL,
             "name": "Security Team"
         },
-        "to": [
-            {"email": RECEIVER_EMAIL}
-        ],
+        "to": [{"email": RECEIVER_EMAIL}],
         "subject": "Security Verification Code",
         "textContent": (
             f"Your verification code for {role} access is: {otp}\n\n"
@@ -50,15 +50,20 @@ def send_otp_email(otp: str, role: str) -> bool:
     }
 
     try:
-        response = requests.post(BREVO_URL, json=payload, headers=headers)
+        response = requests.post(
+            BREVO_URL,
+            json=payload,
+            headers=headers,
+            timeout=10  # ✅ important for production
+        )
 
         if response.status_code in (200, 201, 202):
-            print("✅ OTP sent via Brevo")
+            print("✅ OTP sent via Brevo successfully")
             return True
-        else:
-            print("❌ Brevo error:", response.text)
-            return False
 
-    except Exception as e:
-        print("❌ Brevo exception:", e)
+        print(f"❌ Brevo failed: {response.text}")
+        return False
+
+    except requests.RequestException as e:
+        print(f"❌ Brevo request error: {e}")
         return False

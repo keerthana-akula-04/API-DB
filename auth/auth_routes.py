@@ -1,27 +1,25 @@
-import os
 import time
+import secrets
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 from jose import jwt
-from dotenv import load_dotenv
+from pydantic import BaseModel
 
 from database import get_collections
 from otp_service import generate_otp, send_otp_email
-from pydantic import BaseModel
-
-load_dotenv()
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 # ================= CONFIG =================
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+# ✅ AUTO generate secret (NO ENV needed)
+SECRET_KEY = secrets.token_hex(32)
+
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINUTES = 10
 
-if not SECRET_KEY:
-    raise Exception("JWT_SECRET_KEY missing")
+print("✅ JWT Secret auto-generated")
 
 
 # ================= Schemas =================
@@ -35,30 +33,31 @@ class OTPVerifyRequest(BaseModel):
     otp: str
 
 
-# ================= In-memory stores =================
+# ================= Memory Stores =================
 otp_store = {}
-verified_users = {}
+verified_users = {}   # username -> expiry
 
 
 # ================= LOGIN =================
 @router.post("/login")
 async def login(data: LoginRequest):
+    username = data.username.lower()
+
     cols = get_collections()
     users_col = cols["users_auth_col"]
 
-    user = await users_col.find_one({"username": data.username.lower()})
+    user = await users_col.find_one({"username": username})
 
     if not user or user["password"] != data.password:
         raise HTTPException(401, "Invalid credentials")
 
     otp = generate_otp()
 
-    otp_store[data.username] = {
+    otp_store[username] = {
         "otp": otp,
         "expires": time.time() + 120
     }
 
-    # always send to your fixed email
     send_otp_email(otp, user["role"])
 
     return {"message": "OTP sent successfully"}
@@ -67,27 +66,35 @@ async def login(data: LoginRequest):
 # ================= VERIFY OTP =================
 @router.post("/verify-otp")
 async def verify(data: OTPVerifyRequest):
-    record = otp_store.get(data.username)
+    username = data.username.lower()
+
+    record = otp_store.get(username)
 
     if not record:
         raise HTTPException(401, "OTP not found")
 
     if time.time() > record["expires"]:
+        otp_store.pop(username, None)
         raise HTTPException(401, "OTP expired")
 
     if record["otp"] != data.otp:
         raise HTTPException(401, "Invalid OTP")
 
-    verified_users[data.username] = True
-    otp_store.pop(data.username)
+    verified_users[username] = time.time() + 300
+
+    otp_store.pop(username, None)
 
     return {"message": "OTP verified successfully"}
 
 
-# ================= SUCCESS → ISSUE JWT =================
+# ================= SUCCESS → RETURN JWT =================
 @router.get("/success")
 async def success(username: str):
-    if not verified_users.get(username):
+    username = username.lower()
+
+    expiry = verified_users.get(username)
+
+    if not expiry or time.time() > expiry:
         raise HTTPException(401, "OTP not verified")
 
     cols = get_collections()
@@ -97,7 +104,7 @@ async def success(username: str):
 
     token = jwt.encode(
         {
-            "username": username,
+            "sub": username,
             "role": user["role"],
             "exp": datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
         },
@@ -105,11 +112,12 @@ async def success(username: str):
         algorithm=ALGORITHM
     )
 
-    verified_users.pop(username)
+    verified_users.pop(username, None)
 
     return {
         "status": "success",
-        "token": token,
-        "role": user["role"],
-        "username": username
+        "access_token": token,
+        "token_type": "bearer",
+        "username": username,
+        "role": user["role"]
     }
