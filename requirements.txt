@@ -3,3 +3,5 @@ uvicorn[standard]
 motor
 python-dotenv
 python-jose[cryptography]
+python-multipart
+requests
