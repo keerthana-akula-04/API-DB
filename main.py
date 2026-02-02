@@ -29,16 +29,6 @@ async def shutdown():
 app.include_router(auth_router)
 app.include_router(upload_router)
 
-
-# ---------------- HEALTH ----------------
-@app.get("/")
-def home():
-    return {"message": "API is running successfully 🚀"}
-
-@app.get("/health", tags=["System"])
-async def health():
-    return {"status": "Backend running"}
-
 # ---------------- DASHBOARD ----------------
 @app.get("/get-Super-Admin-Dashboard", tags=["Dashboard API's"])
 async def get_super_admin_dashboard():
