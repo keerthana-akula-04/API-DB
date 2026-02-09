@@ -11,7 +11,6 @@ import cloudinary.uploader
 
 app = FastAPI(title="API's")
 
-# REQUIRED ADDITION
 load_dotenv()
 
 cloudinary.config(
@@ -105,14 +104,8 @@ async def submit_form(
     logo: UploadFile = File(...),
     overview: UploadFile = File(...)
 ):
-    if not any(
-        domain in site_location_map
-        for domain in ["google.com", "goo.gl", "maps.app.goo.gl"]
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Site location must be a valid Google Maps URL"
-        )
+    if not any(domain in site_location_map for domain in ["google.com", "goo.gl", "maps.app.goo.gl"]):
+        raise HTTPException(status_code=400, detail="Site location must be a valid Google Maps URL")
 
     data = load_data()
 
@@ -140,10 +133,16 @@ async def submit_form(
     data["records"].append(record)
     save_data(data)
 
-    # 🔴 STORE IN **NEW COLLECTION**
     cols = get_collections()
-    submissions_col = cols["projects_col"].database["upload"]
-    await submissions_col.insert_one(record)
+
+    # Store upload data
+    await cols["projects_col"].database["upload"].insert_one(record)
+
+    # 🔔 Create notification
+    await cols["alerts_col"].database["notifications"].insert_one({
+        "title": "New Project Uploaded",
+        "message": f"Client {client_name} uploaded a new project"
+    })
 
     return {
         "status": "success",
@@ -151,6 +150,13 @@ async def submit_form(
         "logo_url": logo_url,
         "overview_url": overview_url
     }
+
+# ================= NOTIFICATIONS =================
+@app.get("/notifications", tags=["Notifications API"])
+async def get_notifications():
+    cols = get_collections()
+    cursor = cols["alerts_col"].database["notifications"].find({}, {"_id": 0})
+    return await cursor.to_list(length=None)
 
 # ---------------- DASHBOARD ----------------
 @app.get("/get-Super-Admin-Dashboard", tags=["Dashboard API's"])
@@ -161,65 +167,50 @@ async def get_super_admin_dashboard():
 @app.get("/get-clients", tags=["Dashboard API's"])
 async def get_clients():
     cols = get_collections()
-    cursor = cols["clients_col"].find({}, {"_id": 0})
-    return await cursor.to_list(length=None)
+    return await cols["clients_col"].find({}, {"_id": 0}).to_list(None)
 
 @app.get("/get-industries", tags=["Dashboard API's"])
 async def get_industries():
     cols = get_collections()
-    cursor = cols["industries_col"].find({}, {"_id": 0})
-    return await cursor.to_list(length=None)
+    return await cols["industries_col"].find({}, {"_id": 0}).to_list(None)
 
 @app.get("/get-recent-projects", tags=["Dashboard API's"])
 async def get_recent_projects():
     cols = get_collections()
-    cursor = cols["recent_projects_col"].find({}, {"_id": 0})
-    return await cursor.to_list(length=None)
+    return await cols["recent_projects_col"].find({}, {"_id": 0}).to_list(None)
 
 # ---------------- PROJECTS ----------------
 @app.get("/get-projects", tags=["Projects API's"])
 async def get_projects():
     cols = get_collections()
-    cursor = cols["projects_col"].find({}, {"_id": 0})
-    return await cursor.to_list(length=None)
+    return await cols["projects_col"].find({}, {"_id": 0}).to_list(None)
 
 # ---------------- ANALYTICS ----------------
 @app.get("/get-analytics/{project_id}", tags=["Analytical API's"])
 async def get_project_analytics(project_id: str):
     cols = get_collections()
-    data = await cols["analytics_col"].find_one(
-        {"projectId": project_id},
-        {"_id": 0}
-    )
-    return data if data else {"error": "Analytics not found"}
+    return await cols["analytics_col"].find_one({"projectId": project_id}, {"_id": 0})
 
 # ---------------- IMAGES ----------------
 @app.get("/get-images/{project_id}", tags=["Images API's"])
 async def get_images(project_id: str):
     cols = get_collections()
-    cursor = cols["images_col"].find(
-        {"projectId": project_id},
-        {"_id": 0}
-    )
-    return await cursor.to_list(length=None)
+    return await cols["images_col"].find({"projectId": project_id}, {"_id": 0}).to_list(None)
 
 # ---------------- ALERTS ----------------
 @app.get("/get-alerts", tags=["Alerts API"])
 async def get_alerts():
     cols = get_collections()
-    cursor = cols["alerts_col"].find({}, {"_id": 0})
-    return await cursor.to_list(length=None)
+    return await cols["alerts_col"].find({}, {"_id": 0}).to_list(None)
 
 # ---------------- MANAGEMENT ----------------
 @app.get("/get-users-list", tags=["Management API's"])
 async def get_users():
     cols = get_collections()
-    cursor = cols["users_mgmt_col"].find({}, {"_id": 0})
-    return await cursor.to_list(length=None)
+    return await cols["users_mgmt_col"].find({}, {"_id": 0}).to_list(None)
 
 @app.get("/get-admin-list", tags=["Management API's"])
 async def get_admins():
     cols = get_collections()
-    cursor = cols["admin_mgmt_col"].find({}, {"_id": 0})
-    admins = await cursor.to_list(length=None)
+    admins = await cols["admin_mgmt_col"].find({}, {"_id": 0}).to_list(None)
     return [a["0"] if "0" in a else a for a in admins]
