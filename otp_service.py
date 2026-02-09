@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 
@@ -33,6 +34,7 @@ def send_otp_email(otp: str, role: str) -> bool:
         "accept": "application/json",
         "api-key": BREVO_API_KEY,
         "content-type": "application/json"
+        
     }
 
     payload = {

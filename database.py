@@ -2,7 +2,7 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv("API-DB.env")
 
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "demo_website_db")
@@ -75,6 +75,5 @@ def get_collections():
         "industries_col": database["industries"],
         "clients_col": database["clients"],
         "images_col": database["images"],
-        "admin_dashboard_col": database["admin_dashboard"],
-        "uploads_col": database["uploads"],
+        "admin_dashboard_col": database["admin_dashboard"],        
     }

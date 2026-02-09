@@ -1,11 +1,25 @@
-from fastapi import FastAPI
+import json
+import os
+import uuid
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from auth.auth_routes import router as auth_router
 from database import connect_to_mongo, close_mongo_connection, get_collections
-from upload_routes import router as upload_router
-
+from dotenv import load_dotenv
+import cloudinary
+import cloudinary.uploader
 
 app = FastAPI(title="API's")
+
+# REQUIRED ADDITION
+load_dotenv()
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+    secure=True
+)
 
 # CORS
 app.add_middleware(
@@ -27,7 +41,116 @@ async def shutdown():
 
 # Routers
 app.include_router(auth_router)
-app.include_router(upload_router)
+
+##UPLOAD CODE
+DATA_FILE = "dataa/store.json"
+os.makedirs("dataa", exist_ok=True)
+
+# ---------------- UTIL FUNCTIONS ----------------
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {
+            "clients": [],
+            "industries": [],
+            "deliverables": [],
+            "projects": [],
+            "sites": [],
+            "site_locations": [],
+            "records": []
+        }
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+def add_unique(lst, value):
+    if value not in lst:
+        lst.append(value)
+
+async def upload_to_cloudinary(file: UploadFile, folder: str) -> str:
+    content = await file.read()
+    result = cloudinary.uploader.upload(
+        content,
+        folder=folder,
+        resource_type="auto",
+        public_id=f"{uuid.uuid4()}_{file.filename}"
+    )
+    return result["secure_url"]
+
+# ================= GET API =================
+@app.get("/form-data", tags=["UPLOADS"])
+def get_form_data():
+    data = load_data()
+    return {
+        "clients": data["clients"],
+        "industries": data["industries"],
+        "deliverables": data["deliverables"],
+        "projects": data["projects"],
+        "sites": data["sites"],
+        "site_locations": data["site_locations"]
+    }
+
+# ================= POST API =================
+@app.post("/submit-form", tags=["UPLOADS"])
+async def submit_form(
+    client_name: str = Form(...),
+    industry: str = Form(...),
+    deliverable: str = Form(...),
+    project: str = Form(...),
+    site_name: str = Form(...),
+    site_location_map: str = Form(...),
+    logo: UploadFile = File(...),
+    overview: UploadFile = File(...)
+):
+    if not any(
+        domain in site_location_map
+        for domain in ["google.com", "goo.gl", "maps.app.goo.gl"]
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Site location must be a valid Google Maps URL"
+        )
+
+    data = load_data()
+
+    logo_url = await upload_to_cloudinary(logo, "project_logos")
+    overview_url = await upload_to_cloudinary(overview, "project_overviews")
+
+    add_unique(data["clients"], client_name)
+    add_unique(data["industries"], industry)
+    add_unique(data["deliverables"], deliverable)
+    add_unique(data["projects"], project)
+    add_unique(data["sites"], site_name)
+    add_unique(data["site_locations"], site_location_map)
+
+    record = {
+        "client_name": client_name,
+        "industry": industry,
+        "deliverable": deliverable,
+        "project": project,
+        "site_name": site_name,
+        "site_location_map": site_location_map,
+        "logo_url": logo_url,
+        "overview_url": overview_url
+    }
+
+    data["records"].append(record)
+    save_data(data)
+
+    # 🔴 STORE IN **NEW COLLECTION**
+    cols = get_collections()
+    submissions_col = cols["projects_col"].database["upload"]
+    await submissions_col.insert_one(record)
+
+    return {
+        "status": "success",
+        "message": "Project submitted successfully",
+        "logo_url": logo_url,
+        "overview_url": overview_url
+    }
 
 # ---------------- DASHBOARD ----------------
 @app.get("/get-Super-Admin-Dashboard", tags=["Dashboard API's"])
