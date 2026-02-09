@@ -1,32 +1,9 @@
 {
-  "clients": [
-    "string"
-  ],
-  "industries": [
-    "string"
-  ],
-  "deliverables": [
-    "string"
-  ],
-  "projects": [
-    "string"
-  ],
-  "sites": [
-    "string"
-  ],
-  "site_locations": [
-    "https://maps.app.goo.gl/eezpqPoJRT1di2FA8"
-  ],
-  "records": [
-    {
-      "client_name": "string",
-      "industry": "string",
-      "deliverable": "string",
-      "project": "string",
-      "site_name": "string",
-      "site_location_map": "https://maps.app.goo.gl/eezpqPoJRT1di2FA8",
-      "logo_url": "https://res.cloudinary.com/dateiqugp/image/upload/v1770373640/project_logos/64c9fdcf-7d87-4874-a212-ad45b122bddc_T-Hub_Logo-PNG.png.png",
-      "overview_url": "https://res.cloudinary.com/dateiqugp/raw/upload/v1770373641/project_overviews/e1629ba6-7a33-4530-80da-2dc49e61a7dd_Akin%20Analytics%20%E2%80%93%20Complete%20Local%20Seo%20Process%20Document.docx"
-    }
-  ]
+  "clients": [],
+  "industries": [],
+  "deliverables": [],
+  "projects": [],
+  "sites": [],
+  "site_locations": [],
+  "records": []
 }
