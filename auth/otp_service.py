@@ -8,24 +8,14 @@ load_dotenv()
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 
-# ✅ Fixed receiver (always send here)
-RECEIVER_EMAIL = "thrinethra098@gmail.com"
-
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 
 
-# ================= OTP =================
 def generate_otp() -> str:
     return str(random.randint(100000, 999999))
 
 
-# ================= SEND EMAIL =================
-def send_otp_email(otp: str, role: str) -> bool:
-    """
-    Send OTP using Brevo REST API (NO SMTP)
-    Always sends to fixed receiver
-    """
-
+def send_otp_email(otp: str, receiver_email: str, role: str) -> bool:
     if not BREVO_API_KEY or not SENDER_EMAIL:
         print("❌ Missing BREVO_API_KEY or SENDER_EMAIL")
         return False
@@ -34,7 +24,6 @@ def send_otp_email(otp: str, role: str) -> bool:
         "accept": "application/json",
         "api-key": BREVO_API_KEY,
         "content-type": "application/json"
-        
     }
 
     payload = {
@@ -42,11 +31,11 @@ def send_otp_email(otp: str, role: str) -> bool:
             "email": SENDER_EMAIL,
             "name": "Security Team"
         },
-        "to": [{"email": RECEIVER_EMAIL}],
+        "to": [{"email": receiver_email}],
         "subject": "Security Verification Code",
         "textContent": (
             f"Your verification code for {role} access is: {otp}\n\n"
-            "Valid for 2 minutes."
+            "This OTP is valid for 5 minutes."
         )
     }
 
@@ -55,16 +44,16 @@ def send_otp_email(otp: str, role: str) -> bool:
             BREVO_URL,
             json=payload,
             headers=headers,
-            timeout=10  # ✅ important for production
+            timeout=10
         )
 
         if response.status_code in (200, 201, 202):
-            print("✅ OTP sent via Brevo successfully")
+            print("✅ OTP sent successfully")
             return True
-
-        print(f"❌ Brevo failed: {response.text}")
-        return False
+        else:
+            print(f"❌ Brevo error: {response.text}")
+            return False
 
     except requests.RequestException as e:
-        print(f"❌ Brevo request error: {e}")
+        print(f"❌ Email error: {e}")
         return False

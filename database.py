@@ -2,10 +2,10 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
-load_dotenv("API-DB.env")
+load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
-DATABASE_NAME = os.getenv("DATABASE_NAME", "demo_website_db")
+DATABASE_NAME = os.getenv("DATABASE_NAME", "akin_platform_db")
 
 client: AsyncIOMotorClient | None = None
 db = None
@@ -59,21 +59,18 @@ def get_db():
 
 
 def get_collections():
-    """
-    Centralized collections access
-    """
-    database = get_db()
+    db_instance = get_db()  # ✅ Always get DB safely
 
     return {
-        "users_auth_col": database["users"],
-        "users_mgmt_col": database["users_management"],
-        "admin_mgmt_col": database["admin_management"],
-        "projects_col": database["projects"],
-        "recent_projects_col": database["recent_projects"],
-        "analytics_col": database["analytics"],
-        "alerts_col": database["alerts"],
-        "industries_col": database["industries"],
-        "clients_col": database["clients"],
-        "images_col": database["images"],
-        "admin_dashboard_col": database["admin_dashboard"],        
+        "clients": db_instance["clients"],
+        "industries": db_instance["industries"],
+        "projects_master": db_instance["projects_master"],
+        "projects_client": db_instance["projects_client"],
+        "reports": db_instance["reports"],
+        "analytics": db_instance["analytics"],
+        "alerts": db_instance["alerts"],
+        "notifications": db_instance["notifications"],  # ✅ FIXED
+        "dashboard": db_instance["dashboard"],
+        "deliverables": db_instance["deliverables"],
+        "sessions_col": db_instance["sessions"]
     }
