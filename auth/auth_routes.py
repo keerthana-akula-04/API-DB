@@ -52,6 +52,7 @@ async def login(data: LoginRequest):
         "device_info": "web",
         "issued_at": datetime.utcnow(),
         "expires_at": datetime.utcnow() + timedelta(days=15),
+        "last_activity": datetime.utcnow(),
         "revoked": False
     })
 
@@ -64,6 +65,11 @@ async def login(data: LoginRequest):
 
 
 # ================= REFRESH =================
+from datetime import datetime, timedelta
+
+IDLE_TIMEOUT_MINUTES = 60  # 1 hour
+
+
 @router.post("/refresh")
 async def refresh(data: RefreshRequest):
 
@@ -91,9 +97,21 @@ async def refresh(data: RefreshRequest):
         if not session:
             raise HTTPException(status_code=401, detail="Session not found")
 
-        if datetime.utcnow() > session["expires_at"]:
-            raise HTTPException(status_code=401, detail="Session expired")
+        # 🔥 Idle Timeout Check
+        if datetime.utcnow() - session["last_activity"] > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
+            await cols["sessions_col"].update_one(
+                {"_id": session["_id"]},
+                {"$set": {"revoked": True}}
+            )
+            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
 
+        # 🔥 Update Last Activity
+        await cols["sessions_col"].update_one(
+            {"_id": session["_id"]},
+            {"$set": {"last_activity": datetime.utcnow()}}
+        )
+
+        # Generate new access token
         new_access_token = create_access_token({
             "sub": str(client_id)
         })

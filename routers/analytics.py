@@ -12,7 +12,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 async def get_latest_analytics(user=Depends(get_current_user)):
     cols = get_collections()
 
-    analytics = await cols["analytics"].find().sort("created_at", -1).limit(1).to_list(1)
+    analytics = await cols["analytics"].find().sort("created_at", 1).limit(1).to_list(1)
 
     if not analytics:
         return {"message": "No analytics found"}
