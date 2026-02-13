@@ -53,6 +53,8 @@ async def get_current_user(
             {"$set": {"last_activity": datetime.utcnow()}}
         )
 
+        print("Logged in user role:", payload.get("role"))
+
         return {
             "client_id": payload.get("sub"),
             "username": payload.get("username"),
