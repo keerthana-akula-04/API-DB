@@ -1,5 +1,6 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -7,8 +8,9 @@ load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "akin_platform_db")
 
-client: AsyncIOMotorClient | None = None
-db = None
+client = MongoClient(MONGO_URI)
+
+db = client["akin_platform_db"]
 
 
 # =========================

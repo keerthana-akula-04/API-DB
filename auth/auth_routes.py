@@ -67,7 +67,7 @@ async def login(data: LoginRequest):
 # ================= REFRESH =================
 from datetime import datetime, timedelta
 
-IDLE_TIMEOUT_MINUTES = 60  # 1 hour
+IDLE_TIMEOUT_MINUTES = 1440  # 1 hour
 
 
 @router.post("/refresh")

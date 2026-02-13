@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from routers import dashboard
 from database import connect_to_mongo, close_mongo_connection
 from auth.auth_routes import router as auth_router
+from routers import add_new
 
 # Import routers
 from routers import dashboard, reports, analytics, projects, alerts, admins
@@ -49,5 +50,5 @@ app.include_router(analytics.router)
 app.include_router(projects.router)
 app.include_router(alerts.router)
 app.include_router(admins.router)
-
+app.include_router(add_new.router)
 
