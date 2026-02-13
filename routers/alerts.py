@@ -11,7 +11,6 @@ async def get_alerts(user=Depends(get_current_user)):
     cols = get_collections()
 
     pipeline = [
-        # Join project to get project_name
         {
             "$lookup": {
                 "from": "projects_master",
@@ -26,7 +25,6 @@ async def get_alerts(user=Depends(get_current_user)):
                 "preserveNullAndEmptyArrays": True
             }
         },
-        # Join clients to get assigned_to name
         {
             "$lookup": {
                 "from": "clients",
@@ -41,7 +39,6 @@ async def get_alerts(user=Depends(get_current_user)):
                 "preserveNullAndEmptyArrays": True
             }
         },
-        # Select only required fields
         {
             "$project": {
                 "_id": 0,
@@ -50,7 +47,9 @@ async def get_alerts(user=Depends(get_current_user)):
                 "project_name": "$project_info.project_name",
                 "assigned_to": "$assigned_user.client_name",
                 "status": 1,
-                "severity": 1
+                "severity": 1,
+                "issued_datetime": 1,
+                "resolved_datetime": 1
             }
         }
     ]
