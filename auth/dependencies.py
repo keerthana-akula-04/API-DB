@@ -8,10 +8,8 @@ from database import get_collections
 
 security = HTTPBearer()
 
-SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
-
-IDLE_TIMEOUT_MINUTES = 60  # 👈 1 hour
+IDLE_TIMEOUT_MINUTES = 60  # 1 hour
 
 
 async def get_current_user(
@@ -19,16 +17,32 @@ async def get_current_user(
 ):
     token = credentials.credentials
 
+    # 🔥 Always fetch SECRET_KEY dynamically (avoids None issue)
+    SECRET_KEY = os.getenv("SECRET_KEY")
+
+    if not SECRET_KEY:
+        raise HTTPException(status_code=500, detail="SECRET_KEY not configured")
+
     try:
+        # 🔥 Decode token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
-        if payload.get("type") != "access":
-            raise HTTPException(status_code=401, detail="Invalid token")
+        # Debug (you can remove later)
+        print("Decoded Payload:", payload)
 
-        client_id = ObjectId(payload.get("sub"))
+        # 🔥 Ensure it's an access token
+        if payload.get("type") != "access":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+
+        client_id = payload.get("sub")
+        if not client_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        client_id = ObjectId(client_id)
 
         cols = get_collections()
 
+        # 🔥 Check active session
         session = await cols["sessions_col"].find_one(
             {
                 "client_id": client_id,
@@ -56,10 +70,11 @@ async def get_current_user(
         print("Logged in user role:", payload.get("role"))
 
         return {
-            "client_id": payload.get("sub"),
+            "client_id": str(client_id),
             "username": payload.get("username"),
             "role": payload.get("role")
         }
 
-    except JWTError:
+    except JWTError as e:
+        print("JWT ERROR:", str(e))
         raise HTTPException(status_code=401, detail="Invalid or expired access token")

@@ -32,7 +32,21 @@ async def get_projects(user=Depends(get_current_user)):
                 "project_name": 1,
                 "industry_name": "$industry_info.industry_name",
                 "location_name": 1,
-                "status": 1
+                "status": 1,
+
+                # ✅ Formatted Dates
+                "created_at": {
+                    "$dateToString": {
+                        "format": "%d-%m-%Y %H:%M",
+                        "date": "$created_at"
+                    }
+                },
+                "updated_at": {
+                    "$dateToString": {
+                        "format": "%d-%m-%Y %H:%M",
+                        "date": "$updated_at"
+                    }
+                }
             }
         }
     ]

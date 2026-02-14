@@ -11,6 +11,8 @@ from auth.auth_service import create_access_token, create_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+IDLE_TIMEOUT_MINUTES = 1440  # 24 hours
+
 
 # ================= LOGIN =================
 @router.post("/login")
@@ -65,11 +67,6 @@ async def login(data: LoginRequest):
 
 
 # ================= REFRESH =================
-from datetime import datetime, timedelta
-
-IDLE_TIMEOUT_MINUTES = 1440  # 1 hour
-
-
 @router.post("/refresh")
 async def refresh(data: RefreshRequest):
 
@@ -111,9 +108,17 @@ async def refresh(data: RefreshRequest):
             {"$set": {"last_activity": datetime.utcnow()}}
         )
 
-        # Generate new access token
+        # 🔥 Fetch full user details (IMPORTANT FIX)
+        user = await cols["clients"].find_one({"_id": client_id})
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # 🔥 Create new access token WITH role
         new_access_token = create_access_token({
-            "sub": str(client_id)
+            "sub": str(client_id),
+            "username": user["client_name"],
+            "role": user["role"]
         })
 
         return {
