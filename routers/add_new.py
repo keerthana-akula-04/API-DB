@@ -78,6 +78,9 @@ def get_add_new():
 @router.post("/add-new")
 async def add_new_project(
     client_name: str = Form(...),
+    email_id: str = Form(...),        
+    password: str = Form(...),       
+    role: str = Form(...), 
     industry_name: str = Form(...),
     deliverable_name: str = Form(...),
     project_name: str = Form(...),
@@ -158,24 +161,29 @@ async def add_new_project(
     # ==============================
 
     try:
-
         # CLIENT
-        existing_client = db.clients.find_one({"client_name": client_name})
-        if not existing_client:
-            last = db.clients.find_one({}, sort=[("client_code", -1)])
-            number = 1
-            if last:
-                number = int(last["client_code"].split("_")[1]) + 1
+existing_client = db.clients.find_one({"client_name": client_name})
 
-            db.clients.insert_one({
-                "client_code": f"C_{number}",
-                "client_name": client_name,
-                "email_id": f"{client_name.lower()}{number}@dummy.com",
-                "password": "dummy_password",
-                "role": "admin",
-                "status": "Active",
-                "created_at": datetime.utcnow()
-            })
+if not existing_client:
+    last = db.clients.find_one({}, sort=[("client_code", -1)])
+    number = 1
+    if last and "client_code" in last:
+        try:
+            number = int(last["client_code"].split("_")[1]) + 1
+        except:
+            number = 1
+
+    db.clients.insert_one({
+        "client_code": f"C_{number}",
+        "client_name": client_name,
+        "email_id": email_id,        # ✅ Original value
+        "password": password,        # ✅ Original value
+        "role": role,                # ✅ Original value
+        "status": "Active",
+        "created_at": datetime.utcnow()
+    })
+
+        
 
         # INDUSTRY
         existing_industry = db.industries.find_one({"industry_name": industry_name})
