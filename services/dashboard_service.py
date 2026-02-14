@@ -50,17 +50,18 @@ async def build_dashboard_response():
     # RECENT PROJECTS (TOP 3)
     # =========================
     raw_projects = await db["projects_master"].find(
-    {"created_at": {"$exists": True}},
-    {
-        "_id": 0,
-        "project_code": 1,
-        "project_name": 1,
-        "status": 1,
-        "location_name": 1,
-        "industry_id": 1,
-        "created_at": 1
-    }
-).sort("created_at", -1).limit(3).to_list(length=3)
+        {"created_at": {"$exists": True}},
+        {
+            "_id": 0,
+            "project_code": 1,
+            "project_name": 1,
+            "status": 1,
+            "location_name": 1,
+            "industry_id": 1,
+            "project_image_path": 1,   # ✅ Added
+            "created_at": 1
+        }
+    ).sort("created_at", -1).limit(3).to_list(length=3)
 
     recent_projects = [
         {
@@ -69,7 +70,7 @@ async def build_dashboard_response():
             "industryId": str(p.get("industry_id", "")),
             "clientId": "",
             "location": p.get("location_name", ""),
-            "img": "",
+            "img": p.get("project_image_path", ""),  # ✅ Added
             "date": p["created_at"].strftime("%Y-%m-%d") if p.get("created_at") else "",
             "status": p.get("status", "")
         }
