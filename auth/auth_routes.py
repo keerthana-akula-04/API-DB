@@ -11,7 +11,7 @@ from auth.auth_service import create_access_token, create_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-IDLE_TIMEOUT_MINUTES = 1440  # 24 hours
+IDLE_TIMEOUT_MINUTES = 60 
 
 
 # ================= LOGIN =================
@@ -94,7 +94,7 @@ async def refresh(data: RefreshRequest):
         if not session:
             raise HTTPException(status_code=401, detail="Session not found")
 
-        # 🔥 Idle Timeout Check
+        # Idle Timeout Check
         if datetime.utcnow() - session["last_activity"] > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
             await cols["sessions_col"].update_one(
                 {"_id": session["_id"]},
@@ -102,19 +102,19 @@ async def refresh(data: RefreshRequest):
             )
             raise HTTPException(status_code=401, detail="Session expired due to inactivity")
 
-        # 🔥 Update Last Activity
+        # Update Last Activity
         await cols["sessions_col"].update_one(
             {"_id": session["_id"]},
             {"$set": {"last_activity": datetime.utcnow()}}
         )
 
-        # 🔥 Fetch full user details (IMPORTANT FIX)
+        # Fetch full user details (IMPORTANT FIX)
         user = await cols["clients"].find_one({"_id": client_id})
 
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # 🔥 Create new access token WITH role
+        # Create new access token WITH role
         new_access_token = create_access_token({
             "sub": str(client_id),
             "username": user["client_name"],

@@ -6,10 +6,7 @@ from auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
-
-# ==========================================
 # SINGLE DYNAMIC ANALYTICS ENDPOINT
-# ==========================================
 @router.get("/")
 async def get_analytics(
     industry_id: str,

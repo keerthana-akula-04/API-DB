@@ -31,12 +31,12 @@ def serialize_mongo(document):
     return document
 
 
-# ================= DASHBOARD SUMMARY =================
+# DASHBOARD SUMMARY =
 @router.get("/")
 async def get_dashboard(user=Depends(get_current_user)):
     return await build_dashboard_response()
 
-# ================= GET NOTIFICATIONS =================
+#GET NOTIFICATIONS 
 @router.get("/notifications")
 async def get_notifications(user=Depends(get_current_user)):
     cols = get_collections()

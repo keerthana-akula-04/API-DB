@@ -17,20 +17,20 @@ async def get_current_user(
 ):
     token = credentials.credentials
 
-    # 🔥 Always fetch SECRET_KEY dynamically (avoids None issue)
+    # Always fetch SECRET_KEY dynamically (avoids None issue)
     SECRET_KEY = os.getenv("SECRET_KEY")
 
     if not SECRET_KEY:
         raise HTTPException(status_code=500, detail="SECRET_KEY not configured")
 
     try:
-        # 🔥 Decode token
+        #  Decode token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
         # Debug (you can remove later)
         print("Decoded Payload:", payload)
 
-        # 🔥 Ensure it's an access token
+        #  Ensure it's an access token
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Invalid token type")
 
@@ -42,7 +42,7 @@ async def get_current_user(
 
         cols = get_collections()
 
-        # 🔥 Check active session
+        #  Check active session
         session = await cols["sessions_col"].find_one(
             {
                 "client_id": client_id,
@@ -53,7 +53,7 @@ async def get_current_user(
         if not session:
             raise HTTPException(status_code=401, detail="Session not found")
 
-        # 🔥 Idle Timeout Check
+        #  Idle Timeout Check
         if datetime.utcnow() - session["last_activity"] > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
             await cols["sessions_col"].update_one(
                 {"_id": session["_id"]},
@@ -61,7 +61,7 @@ async def get_current_user(
             )
             raise HTTPException(status_code=401, detail="Session expired due to inactivity")
 
-        # 🔥 Update Last Activity
+        # Update Last Activity
         await cols["sessions_col"].update_one(
             {"_id": session["_id"]},
             {"$set": {"last_activity": datetime.utcnow()}}
@@ -78,3 +78,4 @@ async def get_current_user(
     except JWTError as e:
         print("JWT ERROR:", str(e))
         raise HTTPException(status_code=401, detail="Invalid or expired access token")
+

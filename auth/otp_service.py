@@ -17,7 +17,7 @@ def generate_otp() -> str:
 
 def send_otp_email(otp: str, receiver_email: str, role: str) -> bool:
     if not BREVO_API_KEY or not SENDER_EMAIL:
-        print("❌ Missing BREVO_API_KEY or SENDER_EMAIL")
+        print(" Missing BREVO_API_KEY or SENDER_EMAIL")
         return False
 
     headers = {
@@ -48,12 +48,12 @@ def send_otp_email(otp: str, receiver_email: str, role: str) -> bool:
         )
 
         if response.status_code in (200, 201, 202):
-            print("✅ OTP sent successfully")
+            print(" OTP sent successfully")
             return True
         else:
-            print(f"❌ Brevo error: {response.text}")
+            print(f" Brevo error: {response.text}")
             return False
 
     except requests.RequestException as e:
-        print(f"❌ Email error: {e}")
+        print(f" Email error: {e}")
         return False

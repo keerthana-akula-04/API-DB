@@ -5,7 +5,7 @@ from auth.dependencies import get_current_user
 router = APIRouter(prefix="/admins", tags=["Admins"])
 
 
-# 🔐 Allow ONLY super_admin
+# Allow ONLY super_admin
 def require_super_admin(user=Depends(get_current_user)):
     if user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Access denied")

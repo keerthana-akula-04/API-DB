@@ -10,20 +10,15 @@ router = APIRouter()
 
 DATA_FILE = "data/add_new_data.json"
 
-# ==============================
 # Cloudinary Config
-# ==============================
-
 cloudinary.config(
     cloud_name="your_cloud_name",
     api_key="your_api_key",
     api_secret="your_api_secret"
 )
 
-# ==============================
-# CREATE JSON FROM DB IF NOT EXISTS
-# ==============================
 
+# CREATE JSON FROM DB IF NOT EXISTS
 def create_json_from_db():
     clients = list(db.clients.find({}, {"_id": 0, "client_name": 1}))
     industries = list(db.industries.find({}, {"_id": 0, "industry_name": 1}))
@@ -52,10 +47,7 @@ def create_json_from_db():
         json.dump(formatted_data, f, indent=4)
 
 
-# ==============================
 # GET ADD-NEW
-# ==============================
-
 @router.get("/add-new")
 def get_add_new():
 
@@ -71,16 +63,14 @@ def get_add_new():
     }
 
 
-# ==============================
-# POST ADD-NEW
-# ==============================
 
+# POST ADD-NEW
 @router.post("/add-new")
 async def add_new_project(
     client_name: str = Form(...),
-    email_id: str = Form(...),        
-    password: str = Form(...),       
-    role: str = Form(...), 
+    email_id: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
     industry_name: str = Form(...),
     deliverable_name: str = Form(...),
     project_name: str = Form(...),
@@ -90,6 +80,7 @@ async def add_new_project(
     files: list[UploadFile] = File(...)
 ):
 
+    
     # Validate logo
     if not logo.filename.lower().endswith(".jpg"):
         raise HTTPException(
@@ -97,14 +88,14 @@ async def add_new_project(
             detail="Logo must be in .jpg format only"
         )
 
-    # Upload logo
+    # Upload logo to Cloudinary
     logo_upload = cloudinary.uploader.upload(
         await logo.read(),
         folder="add_new/logos"
     )
     logo_url = logo_upload["secure_url"]
 
-    # Upload files
+    # Upload project files
     uploaded_files = []
 
     for file in files:
@@ -122,7 +113,7 @@ async def add_new_project(
     with open(DATA_FILE, "r") as f:
         data = json.load(f)
 
-    # Update JSON (clean only)
+    # Update JSON
     if client_name not in data["clients"]:
         data["clients"].append(client_name)
 
@@ -156,37 +147,34 @@ async def add_new_project(
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-    # ==============================
     # INSERT INTO DB
-    # ==============================
-
     try:
-        # CLIENT
-existing_client = db.clients.find_one({"client_name": client_name})
 
-if not existing_client:
-    last = db.clients.find_one({}, sort=[("client_code", -1)])
-    number = 1
-    if last and "client_code" in last:
-        try:
-            number = int(last["client_code"].split("_")[1]) + 1
-        except:
+        # ---------- CLIENT ----------
+        existing_client = db.clients.find_one({"client_name": client_name})
+
+        if not existing_client:
+            last = db.clients.find_one({}, sort=[("client_code", -1)])
             number = 1
+            if last and "client_code" in last:
+                try:
+                    number = int(last["client_code"].split("_")[1]) + 1
+                except:
+                    number = 1
 
-    db.clients.insert_one({
-        "client_code": f"C_{number}",
-        "client_name": client_name,
-        "email_id": email_id,        # ✅ Original value
-        "password": password,        # ✅ Original value
-        "role": role,                # ✅ Original value
-        "status": "Active",
-        "created_at": datetime.utcnow()
-    })
+            db.clients.insert_one({
+                "client_code": f"C_{number}",
+                "client_name": client_name,
+                "email_id": email_id,
+                "password": password,
+                "role": role,
+                "status": "Active",
+                "created_at": datetime.utcnow()
+            })
 
-        
-
-        # INDUSTRY
+        # ---------- INDUSTRY ----------
         existing_industry = db.industries.find_one({"industry_name": industry_name})
+
         if not existing_industry:
             db.industries.insert_one({
                 "industry_code": industry_name[:3].upper(),
@@ -197,13 +185,17 @@ if not existing_client:
         industry = db.industries.find_one({"industry_name": industry_name})
         industry_id = industry["_id"]
 
-        # PROJECT MASTER
+        # ---------- PROJECT MASTER ----------
         existing_project = db.projects_master.find_one({"project_name": project_name})
+
         if not existing_project:
             last = db.projects_master.find_one({}, sort=[("project_code", -1)])
             number = 1
             if last:
-                number = int(last["project_code"].split("_")[1]) + 1
+                try:
+                    number = int(last["project_code"].split("_")[1]) + 1
+                except:
+                    number = 1
 
             db.projects_master.insert_one({
                 "project_code": f"PRJ_{number}",
@@ -218,7 +210,7 @@ if not existing_client:
         project = db.projects_master.find_one({"project_name": project_name})
         project_id_db = project["_id"]
 
-        # DELIVERABLE
+        # ---------- DELIVERABLE ----------
         existing_deliverable = db.deliverables.find_one({
             "deliverable_name": deliverable_name
         })
@@ -227,7 +219,10 @@ if not existing_client:
             last = db.deliverables.find_one({}, sort=[("deliverable_code", -1)])
             number = 1
             if last:
-                number = int(last["deliverable_code"].split("_")[1]) + 1
+                try:
+                    number = int(last["deliverable_code"].split("_")[1]) + 1
+                except:
+                    number = 1
 
             db.deliverables.insert_one({
                 "deliverable_code": f"DEL_{number}",

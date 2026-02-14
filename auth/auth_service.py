@@ -13,7 +13,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 15
 
 if not SECRET_KEY:
-    raise Exception("❌ SECRET_KEY not set")
+    raise Exception("SECRET_KEY not set")
 
 
 def create_access_token(data: dict):

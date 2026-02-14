@@ -12,10 +12,7 @@ client = MongoClient(MONGO_URI)
 
 db = client["akin_platform_db"]
 
-
-# =========================
 # Mongo Connection
-# =========================
 async def connect_to_mongo():
     """
     Called on FastAPI startup
@@ -33,7 +30,7 @@ async def connect_to_mongo():
 
     db = client[DATABASE_NAME]
 
-    print("✅ MongoDB connected successfully")
+    print(" MongoDB connected successfully")
 
 
 async def close_mongo_connection():
@@ -44,18 +41,16 @@ async def close_mongo_connection():
 
     if client:
         client.close()
-        print("🔴 MongoDB connection closed")
+        print(" MongoDB connection closed")
 
 
-# =========================
 # Helper functions
-# =========================
 def get_db():
     """
     Safe DB getter
     """
     if db is None:
-        raise Exception("❌ Database not initialized. Did you call connect_to_mongo()?")
+        raise Exception(" Database not initialized. Did you call connect_to_mongo()?")
 
     return db
 
