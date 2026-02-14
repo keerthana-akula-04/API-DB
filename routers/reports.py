@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
+from bson.errors import InvalidId
 from database import get_collections
 from utils.mongo_serializer import serialize_mongo
 from auth.dependencies import get_current_user
@@ -7,9 +8,41 @@ from auth.dependencies import get_current_user
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-# ==========================================
-# SINGLE DYNAMIC REPORTS ENDPOINT
-# ==========================================
+# ======================================================
+# HELPER FUNCTION → Find Report By Filters
+# ======================================================
+
+async def find_report_by_filters(
+    cols,
+    client_id,
+    industry_id,
+    project_id,
+    deliverable_id,
+    version
+):
+    try:
+        query = {
+            "client_id": client_id,
+            "industry_id": ObjectId(industry_id),
+            "project_id": ObjectId(project_id),
+            "deliverable_id": ObjectId(deliverable_id),
+            "version": version
+        }
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    report = await cols["reports"].find_one(query)
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return report
+
+
+# ======================================================
+# 1️⃣ SINGLE DYNAMIC REPORTS ENDPOINT
+# ======================================================
+
 @router.get("/")
 async def get_reports(
     industry_id: str | None = None,
@@ -22,69 +55,71 @@ async def get_reports(
     cols = get_collections()
     client_id = ObjectId(user["client_id"])
 
-    # ------------------------------------------------
-    # CASE 1 → NO FILTERS → RETURN DROPDOWNS
-    # ------------------------------------------------
-    if not industry_id and not project_id and not deliverable_id and not version:
+    # -------------------------------
+    # MODE 1 → RETURN DROPDOWNS
+    # -------------------------------
+    if not industry_id and not project_id and not deliverable_id and version is None:
 
-        industry_ids = await cols["reports"].distinct("industry_id", {"client_id": client_id})
-        project_ids = await cols["reports"].distinct("project_id", {"client_id": client_id})
-        deliverable_ids = await cols["reports"].distinct("deliverable_id", {"client_id": client_id})
-        versions = await cols["reports"].distinct("version", {"client_id": client_id})
+        base_filter = {"client_id": client_id}
 
-        industries_data = await cols["industries"].find(
+        industry_ids = await cols["reports"].distinct("industry_id", base_filter)
+        project_ids = await cols["reports"].distinct("project_id", base_filter)
+        deliverable_ids = await cols["reports"].distinct("deliverable_id", base_filter)
+        versions = await cols["reports"].distinct("version", base_filter)
+
+        industries = await cols["industries"].find(
             {"_id": {"$in": industry_ids}}
         ).to_list(None)
 
-        projects_data = await cols["projects_master"].find(
+        projects = await cols["projects_master"].find(
             {"_id": {"$in": project_ids}}
         ).to_list(None)
 
-        deliverables_data = await cols["deliverables"].find(
+        deliverables = await cols["deliverables"].find(
             {"_id": {"$in": deliverable_ids}}
         ).to_list(None)
 
         return {
             "industries": [
                 {"id": str(i["_id"]), "name": i["industry_name"]}
-                for i in industries_data
+                for i in industries
             ],
             "projects": [
                 {"id": str(p["_id"]), "name": p["project_name"]}
-                for p in projects_data
+                for p in projects
             ],
             "deliverables": [
                 {"id": str(d["_id"]), "name": d["deliverable_name"]}
-                for d in deliverables_data
+                for d in deliverables
             ],
-            "versions": versions
+            "versions": sorted(versions)
         }
 
-    # ------------------------------------------------
-    # CASE 2 → FILTERS PROVIDED → RETURN REPORT
-    # ------------------------------------------------
-    query = {"client_id": client_id}
+    # -------------------------------
+    # MODE 2 → RETURN REPORT
+    # -------------------------------
+    if not all([industry_id, project_id, deliverable_id, version is not None]):
+        raise HTTPException(
+            status_code=400,
+            detail="All filters are required to fetch report"
+        )
 
-    if industry_id:
-        query["industry_id"] = ObjectId(industry_id)
-    if project_id:
-        query["project_id"] = ObjectId(project_id)
-    if deliverable_id:
-        query["deliverable_id"] = ObjectId(deliverable_id)
-    if version:
-        query["version"] = version
+    report = await find_report_by_filters(
+        cols,
+        client_id,
+        industry_id,
+        project_id,
+        deliverable_id,
+        version
+    )
 
-    reports = await cols["reports"].find(query).to_list(None)
-
-    if not reports:
-        raise HTTPException(status_code=404, detail="Report not found")
-
-    return serialize_mongo(reports)
+    return serialize_mongo(report)
 
 
-# ==========================================
-# UNIFIED REPORT + ANALYTICS ENDPOINT
-# ==========================================
+# ======================================================
+# 2️⃣ REPORT + ANALYTICS (FULL)
+# ======================================================
+
 @router.get("/full")
 async def get_full_report(
     industry_id: str,
@@ -97,16 +132,14 @@ async def get_full_report(
     cols = get_collections()
     client_id = ObjectId(user["client_id"])
 
-    report = await cols["reports"].find_one({
-        "client_id": client_id,
-        "industry_id": ObjectId(industry_id),
-        "project_id": ObjectId(project_id),
-        "deliverable_id": ObjectId(deliverable_id),
-        "version": version
-    })
-
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = await find_report_by_filters(
+        cols,
+        client_id,
+        industry_id,
+        project_id,
+        deliverable_id,
+        version
+    )
 
     analytics = await cols["analytics"].find_one({
         "report_id": report["_id"]
