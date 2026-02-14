@@ -120,7 +120,7 @@ async def get_reports(
 # 2️⃣ REPORT + ANALYTICS (FULL)
 # ======================================================
 
-@router.get("/full")
+@router.get("/analytics")
 async def get_full_report(
     industry_id: str,
     project_id: str,

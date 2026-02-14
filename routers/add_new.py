@@ -65,7 +65,7 @@ def get_add_new():
 
 
 # POST ADD-NEW
-@router.post("/add-new")
+@router.post("/Add-New")
 async def add_new_project(
     client_name: str = Form(...),
     email_id: str = Form(...),
