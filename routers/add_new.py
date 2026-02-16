@@ -10,15 +10,71 @@ router = APIRouter()
 
 DATA_FILE = "data/add_new_data.json"
 
+# ==============================
 # Cloudinary Config
+# ==============================
 cloudinary.config(
     cloud_name="your_cloud_name",
     api_key="your_api_key",
     api_secret="your_api_secret"
 )
 
+# ==============================
+# Helper Builders
+# ==============================
 
-# CREATE JSON FROM DB IF NOT EXISTS
+def build_client_doc(client_name, email_id, password, role, logo_url, number):
+    return {
+        "client_code": f"C_{number}",
+        "client_name": client_name or "Unknown Client",
+        "email_id": email_id or "dummy@email.com",
+        "password": password or "dummy_password",
+        "role": role or "admin",
+        "status": "Active",
+        "logo_path": logo_url or "",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+
+
+def build_industry_doc(industry_name):
+    return {
+        "industry_code": (industry_name[:3].upper() if industry_name else "GEN"),
+        "industry_name": industry_name or "General",
+        "industry_image_url": "",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+
+
+def build_project_doc(project_name, location_name, location_url, industry_id, number):
+    return {
+        "project_code": f"PRJ_{number}",
+        "project_name": project_name or "Untitled Project",
+        "project_image_path": "",
+        "location_name": location_name or "Unknown Location",
+        "location_url": location_url or "",
+        "industry_id": industry_id,
+        "status": "Planning",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+
+
+def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
+    return {
+        "deliverable_code": f"DEL_{number}",
+        "deliverable_name": deliverable_name or "General Deliverable",
+        "project_id": project_id,
+        "industry_id": industry_id,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+
+# ==============================
+# Create JSON from DB
+# ==============================
+
 def create_json_from_db():
     clients = list(db.clients.find({}, {"_id": 0, "client_name": 1}))
     industries = list(db.industries.find({}, {"_id": 0, "industry_name": 1}))
@@ -46,11 +102,12 @@ def create_json_from_db():
     with open(DATA_FILE, "w") as f:
         json.dump(formatted_data, f, indent=4)
 
-
+# ==============================
 # GET ADD-NEW
+# ==============================
+
 @router.get("/add-new")
 def get_add_new():
-
     if not os.path.exists(DATA_FILE):
         create_json_from_db()
 
@@ -62,9 +119,10 @@ def get_add_new():
         "data": data
     }
 
-
-
+# ==============================
 # POST ADD-NEW
+# ==============================
+
 @router.post("/add-new")
 async def add_new_project(
     client_name: str = Form(...),
@@ -80,15 +138,11 @@ async def add_new_project(
     files: list[UploadFile] = File(...)
 ):
 
-    
     # Validate logo
     if not logo.filename.lower().endswith(".jpg"):
-        raise HTTPException(
-            status_code=400,
-            detail="Logo must be in .jpg format only"
-        )
+        raise HTTPException(status_code=400, detail="Logo must be in .jpg format only")
 
-    # Upload logo to Cloudinary
+    # Upload logo
     logo_upload = cloudinary.uploader.upload(
         await logo.read(),
         folder="add_new/logos"
@@ -97,14 +151,13 @@ async def add_new_project(
 
     # Upload project files
     uploaded_files = []
-
     for file in files:
-        upload_result = cloudinary.uploader.upload(
+        result = cloudinary.uploader.upload(
             await file.read(),
             folder=f"add_new/projects/{project_name}",
             resource_type="auto"
         )
-        uploaded_files.append(upload_result["secure_url"])
+        uploaded_files.append(result["secure_url"])
 
     # Ensure JSON exists
     if not os.path.exists(DATA_FILE):
@@ -147,10 +200,12 @@ async def add_new_project(
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-    # INSERT INTO DB
-    try:
+    # ==============================
+    # DATABASE INSERT LOGIC
+    # ==============================
 
-        # ---------- CLIENT ----------
+    try:
+        # -------- CLIENT --------
         existing_client = db.clients.find_one({"client_name": client_name})
 
         if not existing_client:
@@ -162,79 +217,66 @@ async def add_new_project(
                 except:
                     number = 1
 
-            db.clients.insert_one({
-                "client_code": f"C_{number}",
-                "client_name": client_name,
-                "email_id": email_id,
-                "password": password,
-                "role": role,
-                "status": "Active",
-                "created_at": datetime.utcnow()
-            })
+            client_doc = build_client_doc(
+                client_name, email_id, password, role, logo_url, number
+            )
+            db.clients.insert_one(client_doc)
 
-        # ---------- INDUSTRY ----------
+        else:
+            db.clients.update_one(
+                {"_id": existing_client["_id"]},
+                {"$set": {"logo_path": logo_url, "updated_at": datetime.utcnow()}}
+            )
+
+        # -------- INDUSTRY --------
         existing_industry = db.industries.find_one({"industry_name": industry_name})
-
         if not existing_industry:
-            db.industries.insert_one({
-                "industry_code": industry_name[:3].upper(),
-                "industry_name": industry_name,
-                "created_at": datetime.utcnow()
-            })
+            db.industries.insert_one(build_industry_doc(industry_name))
 
         industry = db.industries.find_one({"industry_name": industry_name})
         industry_id = industry["_id"]
 
-        # ---------- PROJECT MASTER ----------
+        # -------- PROJECT MASTER --------
         existing_project = db.projects_master.find_one({"project_name": project_name})
-
         if not existing_project:
             last = db.projects_master.find_one({}, sort=[("project_code", -1)])
             number = 1
-            if last:
+            if last and "project_code" in last:
                 try:
                     number = int(last["project_code"].split("_")[1]) + 1
                 except:
                     number = 1
 
-            db.projects_master.insert_one({
-                "project_code": f"PRJ_{number}",
-                "project_name": project_name,
-                "location_name": location_name,
-                "location_url": location_url,
-                "industry_id": industry_id,
-                "status": "Planning",
-                "created_at": datetime.utcnow()
-            })
+            db.projects_master.insert_one(
+                build_project_doc(
+                    project_name, location_name, location_url, industry_id, number
+                )
+            )
 
         project = db.projects_master.find_one({"project_name": project_name})
         project_id_db = project["_id"]
 
-        # ---------- DELIVERABLE ----------
-        existing_deliverable = db.deliverables.find_one({
-            "deliverable_name": deliverable_name
-        })
+        # -------- DELIVERABLE --------
+        existing_deliverable = db.deliverables.find_one(
+            {"deliverable_name": deliverable_name}
+        )
 
         if not existing_deliverable:
             last = db.deliverables.find_one({}, sort=[("deliverable_code", -1)])
             number = 1
-            if last:
+            if last and "deliverable_code" in last:
                 try:
                     number = int(last["deliverable_code"].split("_")[1]) + 1
                 except:
                     number = 1
 
-            db.deliverables.insert_one({
-                "deliverable_code": f"DEL_{number}",
-                "deliverable_name": deliverable_name,
-                "project_id": project_id_db,
-                "industry_id": industry_id,
-                "created_at": datetime.utcnow()
-            })
+            db.deliverables.insert_one(
+                build_deliverable_doc(
+                    deliverable_name, project_id_db, industry_id, number
+                )
+            )
 
     except Exception as e:
         print("DB INSERT ERROR:", e)
 
-    return {
-        "message": "Project added successfully"
-    }
+    return {"message": "Project added successfully"}

@@ -60,24 +60,28 @@ async def get_reports(
     # -------------------------------
     if not industry_id and not project_id and not deliverable_id and version is None:
 
-        base_filter = {"client_id": client_id}
-
-        industry_ids = await cols["reports"].distinct("industry_id", base_filter)
-        project_ids = await cols["reports"].distinct("project_id", base_filter)
-        deliverable_ids = await cols["reports"].distinct("deliverable_id", base_filter)
-        versions = await cols["reports"].distinct("version", base_filter)
+        # 🔥 CHANGED LOGIC HERE
 
         industries = await cols["industries"].find(
-            {"_id": {"$in": industry_ids}}
+            {},
+            {"_id": 1, "industry_name": 1}
         ).to_list(None)
 
         projects = await cols["projects_master"].find(
-            {"_id": {"$in": project_ids}}
+            {},
+            {"_id": 1, "project_name": 1}
         ).to_list(None)
 
         deliverables = await cols["deliverables"].find(
-            {"_id": {"$in": deliverable_ids}}
+            {},
+            {"_id": 1, "deliverable_name": 1}
         ).to_list(None)
+
+        # Versions still from reports (client based)
+        versions = await cols["reports"].distinct(
+            "version",
+            {"client_id": client_id}
+        )
 
         return {
             "industries": [
