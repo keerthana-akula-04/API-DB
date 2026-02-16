@@ -26,12 +26,12 @@ cloudinary.config(
 def build_client_doc(client_name, email_id, password, role, logo_url, number):
     return {
         "client_code": f"C_{number}",
-        "client_name": client_name or "Unknown Client",
-        "email_id": email_id or "dummy@email.com",
-        "password": password or "dummy_password",
-        "role": role or "admin",
+        "client_name": client_name,
+        "email_id": email_id,
+        "password": password,
+        "role": role,
         "status": "Active",
-        "logo_path": logo_url or "",
+        "logo_path": logo_url,
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
@@ -39,8 +39,8 @@ def build_client_doc(client_name, email_id, password, role, logo_url, number):
 
 def build_industry_doc(industry_name):
     return {
-        "industry_code": (industry_name[:3].upper() if industry_name else "GEN"),
-        "industry_name": industry_name or "General",
+        "industry_code": industry_name[:3].upper(),
+        "industry_name": industry_name,
         "industry_image_url": "",
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
@@ -50,10 +50,10 @@ def build_industry_doc(industry_name):
 def build_project_doc(project_name, location_name, location_url, industry_id, number):
     return {
         "project_code": f"PRJ_{number}",
-        "project_name": project_name or "Untitled Project",
+        "project_name": project_name,
         "project_image_path": "",
-        "location_name": location_name or "Unknown Location",
-        "location_url": location_url or "",
+        "location_name": location_name,
+        "location_url": location_url,
         "industry_id": industry_id,
         "status": "Planning",
         "created_at": datetime.utcnow(),
@@ -64,7 +64,7 @@ def build_project_doc(project_name, location_name, location_url, industry_id, nu
 def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
     return {
         "deliverable_code": f"DEL_{number}",
-        "deliverable_name": deliverable_name or "General Deliverable",
+        "deliverable_name": deliverable_name,
         "project_id": project_id,
         "industry_id": industry_id,
         "created_at": datetime.utcnow(),
@@ -138,18 +138,24 @@ async def add_new_project(
     files: list[UploadFile] = File(...)
 ):
 
-    # Validate logo
+    # --------------------------
+    # Validate Logo
+    # --------------------------
     if not logo.filename.lower().endswith(".jpg"):
         raise HTTPException(status_code=400, detail="Logo must be in .jpg format only")
 
-    # Upload logo
+    # --------------------------
+    # Upload Logo to Cloudinary
+    # --------------------------
     logo_upload = cloudinary.uploader.upload(
         await logo.read(),
         folder="add_new/logos"
     )
     logo_url = logo_upload["secure_url"]
 
-    # Upload project files
+    # --------------------------
+    # Upload Project Files
+    # --------------------------
     uploaded_files = []
     for file in files:
         result = cloudinary.uploader.upload(
@@ -159,14 +165,15 @@ async def add_new_project(
         )
         uploaded_files.append(result["secure_url"])
 
-    # Ensure JSON exists
+    # --------------------------
+    # Update JSON File
+    # --------------------------
     if not os.path.exists(DATA_FILE):
         create_json_from_db()
 
     with open(DATA_FILE, "r") as f:
         data = json.load(f)
 
-    # Update JSON
     if client_name not in data["clients"]:
         data["clients"].append(client_name)
 
@@ -201,16 +208,17 @@ async def add_new_project(
         json.dump(data, f, indent=4)
 
     # ==============================
-    # DATABASE INSERT LOGIC
+    # DATABASE INSERT / UPDATE LOGIC
     # ==============================
 
     try:
-        # -------- CLIENT --------
-        existing_client = db.clients.find_one({"client_name": client_name})
+        # -------- CLIENT (EMAIL UNIQUE) --------
+        existing_client = db.clients.find_one({"email_id": email_id})
 
         if not existing_client:
             last = db.clients.find_one({}, sort=[("client_code", -1)])
             number = 1
+
             if last and "client_code" in last:
                 try:
                     number = int(last["client_code"].split("_")[1]) + 1
@@ -225,11 +233,20 @@ async def add_new_project(
         else:
             db.clients.update_one(
                 {"_id": existing_client["_id"]},
-                {"$set": {"logo_path": logo_url, "updated_at": datetime.utcnow()}}
+                {
+                    "$set": {
+                        "client_name": client_name,
+                        "password": password,
+                        "role": role,
+                        "logo_path": logo_url,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
             )
 
         # -------- INDUSTRY --------
         existing_industry = db.industries.find_one({"industry_name": industry_name})
+
         if not existing_industry:
             db.industries.insert_one(build_industry_doc(industry_name))
 
@@ -238,6 +255,7 @@ async def add_new_project(
 
         # -------- PROJECT MASTER --------
         existing_project = db.projects_master.find_one({"project_name": project_name})
+
         if not existing_project:
             last = db.projects_master.find_one({}, sort=[("project_code", -1)])
             number = 1

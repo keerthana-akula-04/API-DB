@@ -34,6 +34,11 @@ async def get_projects(user=Depends(get_current_user)):
                 "location_name": 1,
                 "status": 1,
 
+                # ✅ Added Image URL
+                "image_url": {
+                    "$ifNull": ["$project_image_path", ""]
+                },
+
                 # ✅ Formatted Dates
                 "created_at": {
                     "$dateToString": {
