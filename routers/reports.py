@@ -30,7 +30,7 @@ async def find_report_by_filters(
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    # 🔥 ROLE BASED FILTER
+    # 🔥 Role Based Filtering
     if user["role"] != "super_admin":
         query["client_id"] = ObjectId(user["client_id"])
 
@@ -54,7 +54,6 @@ async def get_reports(
     version: int | None = None,
     user=Depends(get_current_user)
 ):
-
     cols = get_collections()
 
     # -------------------------------
@@ -62,40 +61,29 @@ async def get_reports(
     # -------------------------------
     if not industry_id and not project_id and not deliverable_id and version is None:
 
-        # 🔥 Super Admin → All data
-        if user["role"] == "super_admin":
-            industry_filter = {}
-            project_filter = {}
-            deliverable_filter = {}
-            version_filter = {}
-
-        # 🔥 Normal User → Client based
-        else:
-            client_id = ObjectId(user["client_id"])
-            version_filter = {"client_id": client_id}
-            industry_filter = {}
-            project_filter = {}
-            deliverable_filter = {}
-
         industries = await cols["industries"].find(
-            industry_filter,
+            {},
             {"_id": 1, "industry_name": 1}
         ).to_list(None)
 
         projects = await cols["projects_master"].find(
-            project_filter,
+            {},
             {"_id": 1, "project_name": 1}
         ).to_list(None)
 
         deliverables = await cols["deliverables"].find(
-            deliverable_filter,
+            {},
             {"_id": 1, "deliverable_name": 1}
         ).to_list(None)
 
-        versions = await cols["reports"].distinct(
-            "version",
-            version_filter
-        )
+        # Versions
+        if user["role"] == "super_admin":
+            versions = await cols["reports"].distinct("version")
+        else:
+            versions = await cols["reports"].distinct(
+                "version",
+                {"client_id": ObjectId(user["client_id"])}
+            )
 
         return {
             "industries": [
@@ -119,7 +107,7 @@ async def get_reports(
     if not all([industry_id, project_id, deliverable_id, version is not None]):
         raise HTTPException(
             status_code=400,
-            detail="All filters are required to fetch report"
+            detail="All filters are required"
         )
 
     report = await find_report_by_filters(
@@ -146,7 +134,6 @@ async def get_full_report(
     version: int,
     user=Depends(get_current_user)
 ):
-
     cols = get_collections()
 
     report = await find_report_by_filters(

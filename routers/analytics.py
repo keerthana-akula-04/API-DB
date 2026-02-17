@@ -8,10 +8,6 @@ from routers.reports import find_report_by_filters
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
-# ======================================================
-# 3️⃣ ANALYTICS ONLY
-# ======================================================
-
 @router.get("/")
 async def get_analytics(
     industry_id: str,
@@ -20,13 +16,11 @@ async def get_analytics(
     version: int,
     user=Depends(get_current_user)
 ):
-
     cols = get_collections()
-    client_id = ObjectId(user["client_id"])
 
     report = await find_report_by_filters(
         cols,
-        client_id,
+        user,
         industry_id,
         project_id,
         deliverable_id,
