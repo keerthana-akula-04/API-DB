@@ -14,7 +14,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 
 async def find_report_by_filters(
     cols,
-    client_id,
+    user,
     industry_id,
     project_id,
     deliverable_id,
@@ -22,7 +22,6 @@ async def find_report_by_filters(
 ):
     try:
         query = {
-            "client_id": client_id,
             "industry_id": ObjectId(industry_id),
             "project_id": ObjectId(project_id),
             "deliverable_id": ObjectId(deliverable_id),
@@ -30,6 +29,10 @@ async def find_report_by_filters(
         }
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    # 🔥 ROLE BASED FILTER
+    if user["role"] != "super_admin":
+        query["client_id"] = ObjectId(user["client_id"])
 
     report = await cols["reports"].find_one(query)
 
@@ -53,34 +56,45 @@ async def get_reports(
 ):
 
     cols = get_collections()
-    client_id = ObjectId(user["client_id"])
 
     # -------------------------------
     # MODE 1 → RETURN DROPDOWNS
     # -------------------------------
     if not industry_id and not project_id and not deliverable_id and version is None:
 
-        # 🔥 CHANGED LOGIC HERE
+        # 🔥 Super Admin → All data
+        if user["role"] == "super_admin":
+            industry_filter = {}
+            project_filter = {}
+            deliverable_filter = {}
+            version_filter = {}
+
+        # 🔥 Normal User → Client based
+        else:
+            client_id = ObjectId(user["client_id"])
+            version_filter = {"client_id": client_id}
+            industry_filter = {}
+            project_filter = {}
+            deliverable_filter = {}
 
         industries = await cols["industries"].find(
-            {},
+            industry_filter,
             {"_id": 1, "industry_name": 1}
         ).to_list(None)
 
         projects = await cols["projects_master"].find(
-            {},
+            project_filter,
             {"_id": 1, "project_name": 1}
         ).to_list(None)
 
         deliverables = await cols["deliverables"].find(
-            {},
+            deliverable_filter,
             {"_id": 1, "deliverable_name": 1}
         ).to_list(None)
 
-        # Versions still from reports (client based)
         versions = await cols["reports"].distinct(
             "version",
-            {"client_id": client_id}
+            version_filter
         )
 
         return {
@@ -110,7 +124,7 @@ async def get_reports(
 
     report = await find_report_by_filters(
         cols,
-        client_id,
+        user,
         industry_id,
         project_id,
         deliverable_id,
@@ -134,11 +148,10 @@ async def get_full_report(
 ):
 
     cols = get_collections()
-    client_id = ObjectId(user["client_id"])
 
     report = await find_report_by_filters(
         cols,
-        client_id,
+        user,
         industry_id,
         project_id,
         deliverable_id,
