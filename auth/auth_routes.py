@@ -11,7 +11,7 @@ from auth.auth_service import create_access_token, create_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-IDLE_TIMEOUT_MINUTES = 60 
+IDLE_TIMEOUT_MINUTES = 120 
 
 
 # ================= LOGIN =================
