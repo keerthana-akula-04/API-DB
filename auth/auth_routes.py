@@ -18,6 +18,13 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 IDLE_TIMEOUT_MINUTES = 120
 
+@router.get("/debug-sessions")
+def debug_sessions():
+    db_sqlite = SessionLocal()
+    sessions = db_sqlite.query(SQLiteSession).all()
+    db_sqlite.close()
+    return {"count": len(sessions)}
+
 
 # ================= LOGIN =================
 @router.post("/login")
