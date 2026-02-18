@@ -6,6 +6,10 @@ from routers import dashboard
 from database import connect_to_mongo, close_mongo_connection
 from auth.auth_routes import router as auth_router
 from routers import add_new
+from sqlite_db import engine
+from auth.sqlite_session_model import Base
+
+Base.metadata.create_all(bind=engine)
 
 # Import routers
 from routers import dashboard, reports, analytics, projects, alerts, admins

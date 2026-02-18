@@ -9,9 +9,14 @@ from database import get_collections
 from auth.auth_models import LoginRequest, RefreshRequest
 from auth.auth_service import create_access_token, create_refresh_token
 
+# SQLite imports
+from sqlite_db import SessionLocal
+from auth.sqlite_session_model import Session as SQLiteSession
+
+
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-IDLE_TIMEOUT_MINUTES = 120 
+IDLE_TIMEOUT_MINUTES = 120
 
 
 # ================= LOGIN =================
@@ -46,17 +51,24 @@ async def login(data: LoginRequest):
 
     session_id = str(uuid.uuid4())
 
-    await cols["sessions_col"].insert_one({
-        "session_id": session_id,
-        "client_id": user["_id"],
-        "refresh_jti": decoded_refresh["jti"],
-        "refresh_token": refresh_token,
-        "device_info": "web",
-        "issued_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(days=15),
-        "last_activity": datetime.utcnow(),
-        "revoked": False
-    })
+    # ✅ Store Session in SQLite
+    db_sqlite = SessionLocal()
+
+    new_session = SQLiteSession(
+        session_id=session_id,
+        client_id=str(user["_id"]),
+        refresh_jti=decoded_refresh["jti"],
+        refresh_token=refresh_token,
+        device_info="web",
+        issued_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(days=15),
+        last_activity=datetime.utcnow(),
+        revoked=False
+    )
+
+    db_sqlite.add(new_session)
+    db_sqlite.commit()
+    db_sqlite.close()
 
     return {
         "access_token": access_token,
@@ -83,38 +95,39 @@ async def refresh(data: RefreshRequest):
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 
         refresh_jti = payload.get("jti")
-        client_id = ObjectId(payload.get("sub"))
+        client_id = payload.get("sub")
 
-        session = await cols["sessions_col"].find_one({
-            "client_id": client_id,
-            "refresh_jti": refresh_jti,
-            "revoked": False
-        })
+        # ✅ Get Session from SQLite
+        db_sqlite = SessionLocal()
+
+        session = db_sqlite.query(SQLiteSession).filter(
+            SQLiteSession.client_id == client_id,
+            SQLiteSession.refresh_jti == refresh_jti,
+            SQLiteSession.revoked == False
+        ).first()
 
         if not session:
+            db_sqlite.close()
             raise HTTPException(status_code=401, detail="Session not found")
 
         # Idle Timeout Check
-        if datetime.utcnow() - session["last_activity"] > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
-            await cols["sessions_col"].update_one(
-                {"_id": session["_id"]},
-                {"$set": {"revoked": True}}
-            )
+        if datetime.utcnow() - session.last_activity > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
+            session.revoked = True
+            db_sqlite.commit()
+            db_sqlite.close()
             raise HTTPException(status_code=401, detail="Session expired due to inactivity")
 
         # Update Last Activity
-        await cols["sessions_col"].update_one(
-            {"_id": session["_id"]},
-            {"$set": {"last_activity": datetime.utcnow()}}
-        )
+        session.last_activity = datetime.utcnow()
+        db_sqlite.commit()
+        db_sqlite.close()
 
-        # Fetch full user details (IMPORTANT FIX)
-        user = await cols["clients"].find_one({"_id": client_id})
+        # Fetch full user details from Mongo
+        user = await cols["clients"].find_one({"_id": ObjectId(client_id)})
 
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Create new access token WITH role
         new_access_token = create_access_token({
             "sub": str(client_id),
             "username": user["client_name"],
@@ -134,8 +147,6 @@ async def refresh(data: RefreshRequest):
 @router.post("/logout")
 async def logout(data: RefreshRequest):
 
-    cols = get_collections()
-
     try:
         payload = jwt.decode(
             data.refresh_token,
@@ -143,10 +154,17 @@ async def logout(data: RefreshRequest):
             algorithms=["HS256"]
         )
 
-        await cols["sessions_col"].update_one(
-            {"refresh_jti": payload.get("jti")},
-            {"$set": {"revoked": True}}
-        )
+        db_sqlite = SessionLocal()
+
+        session = db_sqlite.query(SQLiteSession).filter(
+            SQLiteSession.refresh_jti == payload.get("jti")
+        ).first()
+
+        if session:
+            session.revoked = True
+            db_sqlite.commit()
+
+        db_sqlite.close()
 
         return {"message": "Logged out successfully"}
 
