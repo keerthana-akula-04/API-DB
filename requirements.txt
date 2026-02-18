@@ -7,4 +7,5 @@ python-jose
 requests
 python-multipart
 Cloudinary
-sqlalchemy==2.0.29
+sqlalchemy==1.4.52
+
