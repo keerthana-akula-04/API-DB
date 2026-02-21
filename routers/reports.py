@@ -9,6 +9,17 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
 # ======================================================
+# HELPER FUNCTION → Safe ObjectId Conversion
+# ======================================================
+
+def to_object_id(id_str: str, field_name: str):
+    try:
+        return ObjectId(id_str)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
+
+
+# ======================================================
 # HELPER FUNCTION → Find Report By Filters
 # ======================================================
 
@@ -20,15 +31,16 @@ async def find_report_by_filters(
     deliverable_id,
     version
 ):
-    try:
-        query = {
-            "industry_id": ObjectId(industry_id),
-            "project_id": ObjectId(project_id),
-            "deliverable_id": ObjectId(deliverable_id),
-            "version": version
-        }
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid ID format")
+    industry_obj = to_object_id(industry_id, "industry_id")
+    project_obj = to_object_id(project_id, "project_id")
+    deliverable_obj = to_object_id(deliverable_id, "deliverable_id")
+
+    query = {
+        "industry_id": industry_obj,
+        "project_id": project_obj,
+        "deliverable_id": deliverable_obj,
+        "version": version
+    }
 
     # 🔥 Role Based Filtering
     if user["role"] != "super_admin":
@@ -78,10 +90,7 @@ async def get_reports(
     # ======================================================
     if industry_id and not project_id:
 
-        try:
-            industry_obj = ObjectId(industry_id)
-        except InvalidId:
-            raise HTTPException(status_code=400, detail="Invalid industry_id")
+        industry_obj = to_object_id(industry_id, "industry_id")
 
         projects = await cols["projects_master"].find(
             {"industry_id": industry_obj},
@@ -100,10 +109,7 @@ async def get_reports(
     # ======================================================
     if industry_id and project_id and not deliverable_id:
 
-        try:
-            project_obj = ObjectId(project_id)
-        except InvalidId:
-            raise HTTPException(status_code=400, detail="Invalid project_id")
+        project_obj = to_object_id(project_id, "project_id")
 
         deliverables = await cols["deliverables"].find(
             {"project_id": project_obj},
@@ -122,27 +128,28 @@ async def get_reports(
     # ======================================================
     if industry_id and project_id and deliverable_id and version is None:
 
-        try:
-            industry_obj = ObjectId(industry_id)
-            project_obj = ObjectId(project_id)
-            deliverable_obj = ObjectId(deliverable_id)
-        except InvalidId:
-            raise HTTPException(status_code=400, detail="Invalid ID format")
+        industry_obj = to_object_id(industry_id, "industry_id")
+        project_obj = to_object_id(project_id, "project_id")
+        deliverable_obj = to_object_id(deliverable_id, "deliverable_id")
 
         version_filter = {
             "industry_id": industry_obj,
             "project_id": project_obj,
-            "deliverable_id": deliverable_obj
+            "deliverable_id": deliverable_obj,
+            "version": {"$ne": None}  # 🔥 Exclude null versions
         }
 
-        # Role-based filtering
+        # 🔥 Role-based filtering
         if user["role"] != "super_admin":
             version_filter["client_id"] = ObjectId(user["client_id"])
 
         versions = await cols["reports"].distinct("version", version_filter)
 
+        # Remove None safely (double safety)
+        versions = [v for v in versions if v is not None]
+
         return {
-            "versions": sorted(versions)
+            "versions": sorted(versions) if versions else []
         }
 
     # ======================================================
