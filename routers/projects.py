@@ -11,6 +11,9 @@ async def get_projects(user=Depends(get_current_user)):
     cols = get_collections()
 
     pipeline = [
+        # -----------------------------
+        # Industry Lookup
+        # -----------------------------
         {
             "$lookup": {
                 "from": "industries",
@@ -25,6 +28,22 @@ async def get_projects(user=Depends(get_current_user)):
                 "preserveNullAndEmptyArrays": True
             }
         },
+
+        # -----------------------------
+        # Deliverables Lookup
+        # -----------------------------
+        {
+            "$lookup": {
+                "from": "deliverables",
+                "localField": "_id",              # project _id
+                "foreignField": "project_id",     # deliverables.project_id
+                "as": "deliverables_info"
+            }
+        },
+
+        # -----------------------------
+        # Final Projection
+        # -----------------------------
         {
             "$project": {
                 "_id": 0,
@@ -32,14 +51,27 @@ async def get_projects(user=Depends(get_current_user)):
                 "project_name": 1,
                 "industry_name": "$industry_info.industry_name",
                 "location_name": 1,
+                "location_url": 1,
                 "status": 1,
 
-                # ✅ Added Image URL
+                # Deliverables Array
+                "deliverables": {
+                    "$map": {
+                        "input": "$deliverables_info",
+                        "as": "d",
+                        "in": {
+                            "deliverable_code": "$$d.deliverable_code",
+                            "deliverable_name": "$$d.deliverable_name"
+                        }
+                    }
+                },
+
+                # Image URL
                 "image_url": {
                     "$ifNull": ["$project_image_path", ""]
                 },
 
-                # ✅ Formatted Dates
+                # Formatted Dates
                 "created_at": {
                     "$dateToString": {
                         "format": "%d-%m-%Y %H:%M",
