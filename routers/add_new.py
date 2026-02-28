@@ -10,19 +10,14 @@ router = APIRouter()
 
 DATA_FILE = "data/add_new_data.json"
 
-# ==============================
 # Cloudinary Config
-# ==============================
 cloudinary.config(
     cloud_name="your_cloud_name",
     api_key="your_api_key",
     api_secret="your_api_secret"
 )
 
-# ==============================
 # Helper Builders
-# ==============================
-
 def build_client_doc(client_name, email_id, password, role, logo_url, number):
     return {
         "client_code": f"C_{number}",
@@ -71,9 +66,7 @@ def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
         "updated_at": datetime.utcnow()
     }
 
-# ==============================
 # Create JSON from DB
-# ==============================
 
 def create_json_from_db():
     clients = list(db.clients.find({}, {"_id": 0, "client_name": 1}))
@@ -102,9 +95,7 @@ def create_json_from_db():
     with open(DATA_FILE, "w") as f:
         json.dump(formatted_data, f, indent=4)
 
-# ==============================
 # GET ADD-NEW
-# ==============================
 
 @router.get("/add-new")
 def get_add_new():
@@ -119,9 +110,7 @@ def get_add_new():
         "data": data
     }
 
-# ==============================
 # POST ADD-NEW
-# ==============================
 
 @router.post("/add-new")
 async def add_new_project(
@@ -138,24 +127,19 @@ async def add_new_project(
     files: list[UploadFile] = File(...)
 ):
 
-    # --------------------------
+
     # Validate Logo
-    # --------------------------
     if not logo.filename.lower().endswith(".jpg"):
         raise HTTPException(status_code=400, detail="Logo must be in .jpg format only")
 
-    # --------------------------
     # Upload Logo to Cloudinary
-    # --------------------------
     logo_upload = cloudinary.uploader.upload(
         await logo.read(),
         folder="add_new/logos"
     )
     logo_url = logo_upload["secure_url"]
 
-    # --------------------------
     # Upload Project Files
-    # --------------------------
     uploaded_files = []
     for file in files:
         result = cloudinary.uploader.upload(
@@ -165,9 +149,7 @@ async def add_new_project(
         )
         uploaded_files.append(result["secure_url"])
 
-    # --------------------------
     # Update JSON File
-    # --------------------------
     if not os.path.exists(DATA_FILE):
         create_json_from_db()
 
@@ -207,9 +189,7 @@ async def add_new_project(
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-    # ==============================
     # DATABASE INSERT / UPDATE LOGIC
-    # ==============================
 
     try:
         # -------- CLIENT (EMAIL UNIQUE) --------

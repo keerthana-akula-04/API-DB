@@ -11,9 +11,6 @@ async def get_projects(user=Depends(get_current_user)):
     cols = get_collections()
 
     pipeline = [
-        # -----------------------------
-        # Industry Lookup
-        # -----------------------------
         {
             "$lookup": {
                 "from": "industries",
@@ -29,9 +26,6 @@ async def get_projects(user=Depends(get_current_user)):
             }
         },
 
-        # -----------------------------
-        # Deliverables Lookup
-        # -----------------------------
         {
             "$lookup": {
                 "from": "deliverables",
@@ -41,9 +35,7 @@ async def get_projects(user=Depends(get_current_user)):
             }
         },
 
-        # -----------------------------
         # Final Projection
-        # -----------------------------
         {
             "$project": {
                 "_id": 0,

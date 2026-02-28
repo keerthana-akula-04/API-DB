@@ -4,13 +4,14 @@ from database import get_db
 async def build_dashboard_response():
     db = get_db()
 
-    # =========================
+    # ==============================
     # CLIENTS (Active only)
-    # =========================
+    # ==============================
     raw_clients = await db["clients"].find(
         {"status": "Active"},
         {
             "_id": 0,
+            "client_code": 1,     # ✅ Correct field name
             "client_name": 1,
             "logo_path": 1
         }
@@ -18,15 +19,16 @@ async def build_dashboard_response():
 
     clients = [
         {
+            "id": c.get("client_code", ""),   # ✅ Mapping from client_code
             "name": c.get("client_name", ""),
             "logo": c.get("logo_path", "")
         }
         for c in raw_clients
     ]
 
-    # =========================
+    # ==============================
     # INDUSTRIES
-    # =========================
+    # ==============================
     raw_industries = await db["industries"].find(
         {},
         {
@@ -46,9 +48,9 @@ async def build_dashboard_response():
         for i in raw_industries
     ]
 
-    # =========================
+    # ==============================
     # RECENT PROJECTS (TOP 3)
-    # =========================
+    # ==============================
     raw_projects = await db["projects_master"].find(
         {"created_at": {"$exists": True}},
         {
@@ -58,7 +60,7 @@ async def build_dashboard_response():
             "status": 1,
             "location_name": 1,
             "industry_id": 1,
-            "project_image_path": 1,   # ✅ Added
+            "project_image_path": 1,
             "created_at": 1
         }
     ).sort("created_at", -1).limit(3).to_list(length=3)
@@ -68,18 +70,18 @@ async def build_dashboard_response():
             "id": p.get("project_code", ""),
             "name": p.get("project_name", ""),
             "industryId": str(p.get("industry_id", "")),
-            "clientId": "",
+            "clientId": "",  # Not included as requested
             "location": p.get("location_name", ""),
-            "img": p.get("project_image_path", ""),  # ✅ Added
+            "img": p.get("project_image_path", ""),
             "date": p["created_at"].strftime("%Y-%m-%d") if p.get("created_at") else "",
             "status": p.get("status", "")
         }
         for p in raw_projects
     ]
 
-    # =========================
-    # ADMIN DASHBOARD COUNTS (DYNAMIC)
-    # =========================
+    # ==============================
+    # ADMIN DASHBOARD COUNTS
+    # ==============================
     total_clients = await db["clients"].count_documents({"status": "Active"})
     total_industries = await db["industries"].count_documents({})
     total_projects = await db["projects_master"].count_documents({})
@@ -105,12 +107,12 @@ async def build_dashboard_response():
         "planningProjects": planning_projects
     }
 
-    # =========================
+    # ==============================
     # FINAL RESPONSE
-    # =========================
+    # ==============================
     return {
         "admin_dashboard": admin_dashboard,
-        "clients": clients,
+        "clients": clients,   # ✅ Now returns client_code as id
         "industries": industries,
         "recent_projects": recent_projects
     }
