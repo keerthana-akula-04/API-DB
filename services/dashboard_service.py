@@ -5,6 +5,81 @@ async def build_dashboard_response():
     db = get_db()
 
     # ==============================
+    # CLIENTS (Active only)
+    # ==============================
+    raw_clients = await db["clients"].find(
+        {"status": "Active"},
+        {
+            "_id": 0,
+            "client_code": 1,     # ✅ Correct field name
+            "client_name": 1,
+            "logo_path": 1
+        }
+    ).to_list(length=None)
+
+    clients = [
+        {
+            "id": c.get("client_code", ""),   # ✅ Mapping from client_code
+            "name": c.get("client_name", ""),
+            "logo": c.get("logo_path", "")
+        }
+        for c in raw_clients
+    ]
+
+    # ==============================
+    # INDUSTRIES
+    # ==============================
+    raw_industries = await db["industries"].find(
+        {},
+        {
+            "_id": 0,
+            "industry_code": 1,
+            "industry_name": 1,
+            "industry_image_url": 1
+        }
+    ).to_list(length=None)
+
+    industries = [
+        {
+            "id": i.get("industry_code", ""),
+            "name": i.get("industry_name", ""),
+            "img": i.get("industry_image_url", "")
+        }
+        for i in raw_industries
+    ]
+
+    # ==============================
+    # RECENT PROJECTS (TOP 3)
+    # ==============================
+    raw_projects = await db["projects_master"].find(
+        {"created_at": {"$exists": True}},
+        {
+            "_id": 0,
+            "project_code": 1,
+            "project_name": 1,
+            "status": 1,
+            "location_name": 1,
+            "industry_id": 1,
+            "project_image_path": 1,
+            "created_at": 1
+        }
+    ).sort("created_at", -1).limit(3).to_list(length=3)
+
+    recent_projects = [
+        {
+            "id": p.get("project_code", ""),
+            "name": p.get("project_name", ""),
+            "industryId": str(p.get("industry_id", "")),
+            "clientId": "",  # Not included as requested
+            "location": p.get("location_name", ""),
+            "img": p.get("project_image_path", ""),
+            "date": p["created_at"].strftime("%Y-%m-%d") if p.get("created_at") else "",
+            "status": p.get("status", "")
+        }
+        for p in raw_projects
+    ]
+
+    # ==============================
     # ADMIN DASHBOARD COUNTS
     # ==============================
     total_clients = await db["clients"].count_documents({"status": "Active"})
@@ -29,123 +104,15 @@ async def build_dashboard_response():
         "totalProjects": total_projects,
         "activeProjects": active_projects,
         "completedProjects": completed_projects,
-        "planningProjects": planning_projects,
+        "planningProjects": planning_projects
     }
-
-    # ==============================
-    # CLIENTS WITH RELATED DATA
-    # ==============================
-    raw_clients = await db["clients"].find(
-        {"status": "Active"}
-    ).to_list(None)
-
-    clients_response = []
-
-    for client in raw_clients:
-
-        # Get mapping records for this client
-        mappings = await db["project_client"].find(
-            {"client_id": client["_id"]}
-        ).to_list(None)
-
-        industry_map = {}
-
-        for map_item in mappings:
-
-            # ---------------------------
-            # INDUSTRY
-            # ---------------------------
-            industry = await db["industries"].find_one(
-                {"_id": map_item["industry_id"]}
-            )
-
-            if not industry:
-                continue
-
-            industry_code = industry["industry_code"]
-
-            if industry_code not in industry_map:
-                industry_map[industry_code] = {
-                    "id": industry["industry_code"],
-                    "name": industry["industry_name"],
-                    "img": industry.get("industry_image_url", ""),
-                    "projects": {}
-                }
-
-            # ---------------------------
-            # PROJECT
-            # ---------------------------
-            project = await db["projects_master"].find_one(
-                {"_id": map_item["project_id"]}
-            )
-
-            if not project:
-                continue
-
-            project_code = project["project_code"]
-
-            if project_code not in industry_map[industry_code]["projects"]:
-                industry_map[industry_code]["projects"][project_code] = {
-                    "id": project["project_code"],
-                    "name": project["project_name"],
-                    "status": project.get("status", ""),
-                    "location": project.get("location_name", ""),
-                    "progress": map_item.get("progress", 0),
-                    "img": project.get("project_image_path", ""),
-                    "deliverables": []
-                }
-
-            # ---------------------------
-            # DELIVERABLE
-            # ---------------------------
-            deliverable = await db["deliverables"].find_one(
-                {"_id": map_item["deliverable_id"]}
-            )
-
-            if deliverable:
-                industry_map[industry_code]["projects"][project_code]["deliverables"].append({
-                    "id": deliverable.get("deliverable_code", ""),
-                    "name": deliverable.get("deliverable_name", ""),
-                    "img": deliverable.get("deliverable_img_path", "")
-                })
-
-        # Convert nested project dict to list
-        industries_list = []
-
-        for industry in industry_map.values():
-            industry["projects"] = list(industry["projects"].values())
-            industries_list.append(industry)
-
-        clients_response.append({
-            "id": client.get("client_code", ""),
-            "name": client.get("client_name", ""),
-            "logo": client.get("logo_path", ""),
-            "industries": industries_list
-        })
-
-    # ==============================
-    # RECENT PROJECTS (LATEST 3)
-    # ==============================
-    raw_recent_projects = await db["projects_master"].find(
-        {"created_at": {"$exists": True}}
-    ).sort("created_at", -1).limit(3).to_list(3)
-
-    recent_projects = [
-        {
-            "id": p.get("project_code", ""),
-            "name": p.get("project_name", ""),
-            "status": p.get("status", ""),
-            "date": p["created_at"].strftime("%Y-%m-%d")
-            if p.get("created_at") else "",
-        }
-        for p in raw_recent_projects
-    ]
 
     # ==============================
     # FINAL RESPONSE
     # ==============================
     return {
         "admin_dashboard": admin_dashboard,
-        "clients": clients_response,
+        "clients": clients,   # ✅ Now returns client_code as id
+        "industries": industries,
         "recent_projects": recent_projects
     }
