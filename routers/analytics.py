@@ -8,9 +8,6 @@ from routers.reports import find_report_by_filters
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
-
-# SINGLE DYNAMIC ANALYTICS ENDPOINT (CASCADING)
-
 @router.get("/")
 async def get_analytics(
     industry_id: str | None = None,
@@ -102,9 +99,7 @@ async def get_analytics(
             "versions": sorted(versions)
         }
 
-    # ======================================================
     # STEP 5 → ALL SELECTED → RETURN FINAL ANALYTICS
-    # ======================================================
     if industry_id and project_id and deliverable_id and version is not None:
 
         report = await find_report_by_filters(

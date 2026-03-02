@@ -12,9 +12,6 @@ from auth.dependencies import get_current_user
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
-# ==========================
-# HELPER: Serialize ObjectId
-# ==========================
 def serialize_mongo(document):
     if isinstance(document, list):
         return [serialize_mongo(doc) for doc in document]

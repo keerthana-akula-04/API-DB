@@ -25,17 +25,15 @@ async def get_projects(user=Depends(get_current_user)):
                 "preserveNullAndEmptyArrays": True
             }
         },
-
         {
             "$lookup": {
                 "from": "deliverables",
-                "localField": "_id",              # project _id
-                "foreignField": "project_id",     # deliverables.project_id
+                "localField": "_id",
+                "foreignField": "project_id",
                 "as": "deliverables_info"
             }
         },
 
-        # Final Projection
         {
             "$project": {
                 "_id": 0,
@@ -45,20 +43,22 @@ async def get_projects(user=Depends(get_current_user)):
                 "location_name": 1,
                 "location_url": 1,
                 "status": 1,
-
-                # Deliverables Array
+              
                 "deliverables": {
                     "$map": {
                         "input": "$deliverables_info",
                         "as": "d",
                         "in": {
                             "deliverable_code": "$$d.deliverable_code",
-                            "deliverable_name": "$$d.deliverable_name"
+                            "deliverable_name": "$$d.deliverable_name",
+                            "deliverable_img_path": {
+                                "$ifNull": ["$$d.deliverable_img_path", ""]
+                            }
                         }
                     }
                 },
 
-                # Image URL
+                # Project Image
                 "image_url": {
                     "$ifNull": ["$project_image_path", ""]
                 },
