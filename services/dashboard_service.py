@@ -4,9 +4,9 @@ from database import get_db
 async def build_dashboard_response():
     db = get_db()
 
-    # =========================================================
+    # =====================================================
     # 1️⃣ ADMIN DASHBOARD COUNTS
-    # =========================================================
+    # =====================================================
 
     total_clients = await db["clients"].count_documents({"status": "Active"})
     total_industries = await db["industries"].count_documents({})
@@ -15,11 +15,9 @@ async def build_dashboard_response():
     active_projects = await db["projects_master"].count_documents(
         {"status": "Inprogress"}
     )
-
     completed_projects = await db["projects_master"].count_documents(
         {"status": "Completed"}
     )
-
     planning_projects = await db["projects_master"].count_documents(
         {"status": "Planning"}
     )
@@ -33,11 +31,11 @@ async def build_dashboard_response():
         "planningProjects": planning_projects
     }
 
-    # =========================================================
-    # 2️⃣ GLOBAL INDUSTRIES (UNCHANGED)
-    # =========================================================
+    # =====================================================
+    # 2️⃣ GLOBAL INDUSTRIES
+    # =====================================================
 
-    industries_data = await db["industries"].find(
+    industries_raw = await db["industries"].find(
         {},
         {
             "_id": 0,
@@ -53,14 +51,14 @@ async def build_dashboard_response():
             "name": i.get("industry_name", ""),
             "img": i.get("industry_image_url", "")
         }
-        for i in industries_data
+        for i in industries_raw
     ]
 
-    # =========================================================
-    # 3️⃣ RECENT PROJECTS (TOP 3) – UNCHANGED
-    # =========================================================
+    # =====================================================
+    # 3️⃣ RECENT PROJECTS
+    # =====================================================
 
-    raw_projects = await db["projects_master"].find(
+    recent_raw = await db["projects_master"].find(
         {"created_at": {"$exists": True}},
         {
             "_id": 1,
@@ -86,70 +84,86 @@ async def build_dashboard_response():
             if p.get("created_at") else "",
             "status": p.get("status", "")
         }
-        for p in raw_projects
+        for p in recent_raw
     ]
 
-    # =========================================================
-    # 4️⃣ CLIENTS WITH RELATED DATA ONLY
-    # =========================================================
+    # =====================================================
+    # 4️⃣ CLIENTS WITH PROPER $LOOKUP JOIN
+    # =====================================================
 
-    clients_data = await db["clients"].find(
-        {"status": "Active"},
+    pipeline = [
+        {"$match": {"status": "Active"}},
+
         {
-            "_id": 1,
-            "client_code": 1,
-            "client_name": 1,
-            "logo_path": 1
+            "$lookup": {
+                "from": "projects_client",
+                "localField": "_id",
+                "foreignField": "client_id",
+                "as": "project_links"
+            }
+        },
+
+        {
+            "$lookup": {
+                "from": "industries",
+                "localField": "project_links.industry_id",
+                "foreignField": "_id",
+                "as": "industry_details"
+            }
+        },
+
+        {
+            "$lookup": {
+                "from": "projects_master",
+                "localField": "project_links.project_id",
+                "foreignField": "_id",
+                "as": "project_details"
+            }
+        },
+
+        {
+            "$lookup": {
+                "from": "deliverables",
+                "localField": "project_links.deliverable_id",
+                "foreignField": "_id",
+                "as": "deliverable_details"
+            }
         }
-    ).to_list(length=None)
+    ]
+
+    clients_raw = await db["clients"].aggregate(pipeline).to_list(length=None)
 
     final_clients = []
 
-    for client in clients_data:
-
-        client_id = client["_id"]
-
-        # 🔹 Fetch only this client's mappings
-        project_links = await db["project_clients"].find(
-            {"client_id": client_id}
-        ).to_list(length=None)
-
-        if not project_links:
-            continue
-
-        industry_ids = list(set([p["industry_id"] for p in project_links]))
-        project_ids = list(set([p["project_id"] for p in project_links]))
-        deliverable_ids = list(set([p["deliverable_id"] for p in project_links]))
-
-        industries_data = await db["industries"].find(
-            {"_id": {"$in": industry_ids}}
-        ).to_list(length=None)
-
-        projects_data = await db["projects_master"].find(
-            {"_id": {"$in": project_ids}}
-        ).to_list(length=None)
-
-        deliverables_data = await db["deliverables"].find(
-            {"_id": {"$in": deliverable_ids}}
-        ).to_list(length=None)
-
-        industries_map = {i["_id"]: i for i in industries_data}
-        projects_map = {p["_id"]: p for p in projects_data}
-        deliverables_map = {d["_id"]: d for d in deliverables_data}
+    for client in clients_raw:
 
         industries_group = {}
 
-        for link in project_links:
+        # Process project links
+        for link in client.get("project_links", []):
 
-            industry = industries_map.get(link["industry_id"])
-            project = projects_map.get(link["project_id"])
-            deliverable = deliverables_map.get(link["deliverable_id"])
+            industry = next(
+                (i for i in client["industry_details"]
+                 if i["_id"] == link["industry_id"]),
+                None
+            )
 
-            if not industry or not project:
-                continue
+            project = next(
+                (p for p in client["project_details"]
+                 if p["_id"] == link["project_id"]),
+                None
+            )
+
+            deliverable = next(
+                (d for d in client["deliverable_details"]
+                 if d["_id"] == link["deliverable_id"]),
+                None
+            )
+
+            if not industry:
+                continue  # skip if industry not found
 
             industry_id = industry["_id"]
-            project_id = project["_id"]
 
             if industry_id not in industries_group:
                 industries_group[industry_id] = {
@@ -159,29 +173,42 @@ async def build_dashboard_response():
                     "projects": {}
                 }
 
-            if project_id not in industries_group[industry_id]["projects"]:
-                industries_group[industry_id]["projects"][project_id] = {
-                    "id": project.get("project_code", ""),
-                    "name": project.get("project_name", ""),
-                    "location": project.get("location_name", ""),
-                    "img": project.get("project_image_path", ""),
-                    "status": project.get("status", ""),
-                    "deliverables": []
+            if project:
+                project_id = project["_id"]
+                if project_id not in industries_group[industry_id]["projects"]:
+                    industries_group[industry_id]["projects"][project_id] = {
+                        "id": project.get("project_code", ""),
+                        "name": project.get("project_name", ""),
+                        "location": project.get("location_name", ""),
+                        "img": project.get("project_image_path", ""),
+                        "status": project.get("status", ""),
+                        "deliverables": []
+                    }
+
+                if deliverable:
+                    industries_group[industry_id]["projects"][project_id]["deliverables"].append({
+                        "id": deliverable.get("deliverable_code", ""),
+                        "name": deliverable.get("deliverable_name", ""),
+                        "img": deliverable.get("deliverable_img_path", ""),
+                        "date": deliverable["created_at"].strftime("%Y-%m-%d")
+                        if deliverable.get("created_at") else ""
+                    })
+
+        # Ensure industries appear even if no projects exist
+        for industry in client.get("industry_details", []):
+            industry_id = industry["_id"]
+            if industry_id not in industries_group:
+                industries_group[industry_id] = {
+                    "id": industry.get("industry_code", ""),
+                    "name": industry.get("industry_name", ""),
+                    "img": industry.get("industry_image_url", ""),
+                    "projects": []  # explicitly empty list
                 }
 
-            if deliverable:
-                industries_group[industry_id]["projects"][project_id]["deliverables"].append({
-                    "id": deliverable.get("deliverable_code", ""),
-                    "name": deliverable.get("deliverable_name", ""),
-                    "img": deliverable.get("deliverable_img_path", ""),
-                    "date": deliverable["created_at"].strftime("%Y-%m-%d")
-                    if deliverable.get("created_at") else ""
-                })
-
-        # Convert dict → list
         industries_list = []
         for ind in industries_group.values():
-            ind["projects"] = list(ind["projects"].values())
+            if isinstance(ind["projects"], dict):
+                ind["projects"] = list(ind["projects"].values())
             industries_list.append(ind)
 
         final_clients.append({
@@ -191,9 +218,9 @@ async def build_dashboard_response():
             "industries": industries_list
         })
 
-    # =========================================================
+    # =====================================================
     # 5️⃣ FINAL RESPONSE
-    # =========================================================
+    # =====================================================
 
     return {
         "admin_dashboard": admin_dashboard,
