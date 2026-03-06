@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from typing import List, Annotated
+from typing import List
 from datetime import datetime
 from database import db
 import cloudinary
@@ -8,7 +8,7 @@ import cloudinary.uploader
 router = APIRouter()
 
 # ---------------------------
-# Cloudinary Configuration
+# Cloudinary Config
 # ---------------------------
 
 cloudinary.config(
@@ -70,6 +70,7 @@ def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
         "updated_at": datetime.utcnow()
     }
 
+
 # ---------------------------
 # GET /add-new
 # ---------------------------
@@ -103,6 +104,7 @@ def get_add_new():
         }
     }
 
+
 # ---------------------------
 # POST /add-new
 # ---------------------------
@@ -119,11 +121,11 @@ async def add_new_project(
     location_name: str = Form(...),
     location_url: str = Form(...),
     logo: UploadFile = File(...),
-    files: Annotated[List[UploadFile], File(...)]
+    files: List[UploadFile] = File(...)
 ):
 
     # ---------------------------
-    # VALIDATION
+    # Validation
     # ---------------------------
 
     if role not in ["super_admin", "admin", "user"]:
@@ -147,12 +149,12 @@ async def add_new_project(
     logo_url = logo_upload["secure_url"]
 
     # ---------------------------
-    # Upload Project Files
+    # Upload Files
     # ---------------------------
 
     uploaded_files = []
 
-    # safety check for single file
+    # safety if only one file comes
     if not isinstance(files, list):
         files = [files]
 
@@ -167,7 +169,7 @@ async def add_new_project(
         uploaded_files.append(result["secure_url"])
 
     # ---------------------------
-    # CLIENT LOGIC
+    # CLIENT
     # ---------------------------
 
     existing_client = db.clients.find_one({"email_id": email_id})
