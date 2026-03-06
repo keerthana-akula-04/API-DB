@@ -16,7 +16,7 @@ cloudinary.config(
 )
 
 # -----------------------------
-# Helper Functions
+# Helper Builders
 # -----------------------------
 
 def build_client_doc(client_name, email_id, password, role, logo_url, number):
@@ -37,6 +37,7 @@ def build_industry_doc(industry_name):
     return {
         "industry_code": industry_name[:3].upper(),
         "industry_name": industry_name,
+        "industry_image_url": "",
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
@@ -62,13 +63,13 @@ def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
         "deliverable_name": deliverable_name,
         "project_id": project_id,
         "industry_id": industry_id,
+        "deliverable_img_path": "",   # REQUIRED FIELD (Option-1)
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
 
-
 # -----------------------------
-# GET API → Fetch Existing Data
+# GET /add-new
 # -----------------------------
 
 @router.get("/add-new")
@@ -108,9 +109,8 @@ def get_add_new():
         }
     }
 
-
 # -----------------------------
-# POST API → Add New Project
+# POST /add-new
 # -----------------------------
 
 @router.post("/add-new")
@@ -128,14 +128,30 @@ async def add_new_project(
     files: list[UploadFile] = File(...)
 ):
 
+    # Validate role
+    if role not in ["super_admin", "admin", "user"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Role must be super_admin, admin, or user"
+        )
+
+    # Validate email
+    if "@" not in email_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid email format"
+        )
+
     # Validate logo
     if not logo.filename.lower().endswith(".jpg"):
         raise HTTPException(
             status_code=400,
-            detail="Logo must be in .jpg format"
+            detail="Logo must be a .jpg file"
         )
 
+    # -----------------------------
     # Upload logo
+    # -----------------------------
     logo_upload = cloudinary.uploader.upload(
         await logo.read(),
         folder="add_new/logos"
@@ -143,7 +159,9 @@ async def add_new_project(
 
     logo_url = logo_upload["secure_url"]
 
+    # -----------------------------
     # Upload project files
+    # -----------------------------
     uploaded_files = []
 
     for file in files:
@@ -157,22 +175,16 @@ async def add_new_project(
         uploaded_files.append(result["secure_url"])
 
     # -----------------------------
-    # CLIENT LOGIC
+    # CLIENT
     # -----------------------------
 
-    existing_client = db.clients.find_one(
-        {"email_id": email_id}
-    )
+    existing_client = db.clients.find_one({"email_id": email_id})
 
     if not existing_client:
 
-        last_client = db.clients.find_one(
-            {},
-            sort=[("client_code", -1)]
-        )
+        last_client = db.clients.find_one({}, sort=[("client_code", -1)])
 
         number = 1
-
         if last_client and "client_code" in last_client:
             try:
                 number = int(last_client["client_code"].split("_")[1]) + 1
@@ -206,12 +218,10 @@ async def add_new_project(
         )
 
     # -----------------------------
-    # INDUSTRY LOGIC
+    # INDUSTRY
     # -----------------------------
 
-    industry = db.industries.find_one(
-        {"industry_name": industry_name}
-    )
+    industry = db.industries.find_one({"industry_name": industry_name})
 
     if not industry:
 
@@ -241,7 +251,6 @@ async def add_new_project(
         )
 
         number = 1
-
         if last_project:
             try:
                 number = int(last_project["project_code"].split("_")[1]) + 1
@@ -280,7 +289,6 @@ async def add_new_project(
         )
 
         number = 1
-
         if last_deliverable:
             try:
                 number = int(last_deliverable["deliverable_code"].split("_")[1]) + 1
@@ -298,5 +306,5 @@ async def add_new_project(
 
     return {
         "message": "Project added successfully",
-        "files_uploaded": uploaded_files
+        "uploaded_files": uploaded_files
     }
