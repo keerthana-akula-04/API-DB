@@ -16,7 +16,6 @@ cloudinary.config(
     api_key="your_api_key",
     api_secret="your_api_secret"
 )
-
 # ---------------------------
 # Helper Functions
 # ---------------------------
@@ -119,7 +118,9 @@ async def add_new_project(
     location_name: str = Form(...),
     location_url: str = Form(...),
     logo: UploadFile = File(...),
-    files: List[UploadFile] = File(...)):
+    files: List[UploadFile] = File(...)
+):
+    
 
     # Validate role
     if role not in ["super_admin", "admin", "user"]:
