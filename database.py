@@ -56,7 +56,7 @@ def get_db():
 
 
 def get_collections():
-    db_instance = get_db()  # ✅ Always get DB safely
+    db_instance = get_db()  
 
     return {
         "clients": db_instance["clients"],
@@ -66,7 +66,7 @@ def get_collections():
         "reports": db_instance["reports"],
         "analytics": db_instance["analytics"],
         "alerts": db_instance["alerts"],
-        "notifications": db_instance["notifications"],  # ✅ FIXED
+        "notifications": db_instance["notifications"],  
         "dashboard": db_instance["dashboard"],
         "deliverables": db_instance["deliverables"],
         "sessions_col": db_instance["sessions"]

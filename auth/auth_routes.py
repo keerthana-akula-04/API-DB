@@ -26,7 +26,7 @@ def debug_sessions():
     return {"count": len(sessions)}
 
 
-# ================= LOGIN =================
+#LOGIN 
 @router.post("/login")
 async def login(data: LoginRequest):
 
@@ -58,7 +58,7 @@ async def login(data: LoginRequest):
 
     session_id = str(uuid.uuid4())
 
-    # ✅ Store Session in SQLite
+    # Store Session in SQLite
     db_sqlite = SessionLocal()
 
     new_session = SQLiteSession(
@@ -85,7 +85,7 @@ async def login(data: LoginRequest):
     }
 
 
-# ================= REFRESH =================
+#REFRESH
 @router.post("/refresh")
 async def refresh(data: RefreshRequest):
 
@@ -104,7 +104,7 @@ async def refresh(data: RefreshRequest):
         refresh_jti = payload.get("jti")
         client_id = payload.get("sub")
 
-        # ✅ Get Session from SQLite
+        # Get Session from SQLite
         db_sqlite = SessionLocal()
 
         session = db_sqlite.query(SQLiteSession).filter(
@@ -150,7 +150,7 @@ async def refresh(data: RefreshRequest):
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
 
-# ================= LOGOUT =================
+#  LOGOUT 
 @router.post("/logout")
 async def logout(data: RefreshRequest):
 

@@ -4,9 +4,7 @@ from database import get_db
 async def build_dashboard_response():
     db = get_db()
 
-    # =====================================================
-    # 1️⃣ ADMIN DASHBOARD COUNTS
-    # =====================================================
+    # 1️.ADMIN DASHBOARD COUNTS
 
     total_clients = await db["clients"].count_documents({"status": "Active"})
     total_industries = await db["industries"].count_documents({})
@@ -31,9 +29,7 @@ async def build_dashboard_response():
         "planningProjects": planning_projects
     }
 
-    # =====================================================
-    # 2️⃣ GLOBAL INDUSTRIES
-    # =====================================================
+    # 2️. GLOBAL INDUSTRIES
 
     industries_raw = await db["industries"].find(
         {},
@@ -54,9 +50,7 @@ async def build_dashboard_response():
         for i in industries_raw
     ]
 
-    # =====================================================
-    # 3️⃣ RECENT PROJECTS
-    # =====================================================
+    # 3️. RECENT PROJECTS
 
     recent_raw = await db["projects_master"].find(
         {"created_at": {"$exists": True}},
@@ -87,9 +81,7 @@ async def build_dashboard_response():
         for p in recent_raw
     ]
 
-    # =====================================================
-    # 4️⃣ CLIENTS WITH PROPER $LOOKUP JOIN
-    # =====================================================
+    # 4️. CLIENTS WITH PROPER $LOOKUP JOIN
 
     pipeline = [
         {"$match": {"status": "Active"}},
@@ -218,9 +210,7 @@ async def build_dashboard_response():
             "industries": industries_list
         })
 
-    # =====================================================
-    # 5️⃣ FINAL RESPONSE
-    # =====================================================
+    # 5️ FINAL RESPONSE
 
     return {
         "admin_dashboard": admin_dashboard,
@@ -228,3 +218,7 @@ async def build_dashboard_response():
         "industries": industries,
         "recent_projects": recent_projects
     }
+
+
+
+    
