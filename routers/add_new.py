@@ -1,24 +1,24 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from datetime import datetime
 from database import db
-from typing import List
 import cloudinary
 import cloudinary.uploader
-from datetime import datetime
 
 router = APIRouter()
 
-# -----------------------------
-# Cloudinary Config
-# -----------------------------
+# ---------------------------
+# Cloudinary Configuration
+# ---------------------------
+
 cloudinary.config(
     cloud_name="your_cloud_name",
     api_key="your_api_key",
     api_secret="your_api_secret"
 )
 
-# -----------------------------
-# Helper Builders
-# -----------------------------
+# ---------------------------
+# Helper Functions
+# ---------------------------
 
 def build_client_doc(client_name, email_id, password, role, logo_url, number):
     return {
@@ -64,29 +64,21 @@ def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
         "deliverable_name": deliverable_name,
         "project_id": project_id,
         "industry_id": industry_id,
-        "deliverable_img_path": "",   # REQUIRED FIELD (Option-1)
+        "deliverable_img_path": "",   # required field
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
 
-# -----------------------------
+# ---------------------------
 # GET /add-new
-# -----------------------------
+# ---------------------------
 
 @router.get("/add-new")
 def get_add_new():
 
-    clients = list(
-        db.clients.find({}, {"_id": 0, "client_name": 1})
-    )
-
-    industries = list(
-        db.industries.find({}, {"_id": 0, "industry_name": 1})
-    )
-
-    deliverables = list(
-        db.deliverables.find({}, {"_id": 0, "deliverable_name": 1})
-    )
+    clients = list(db.clients.find({}, {"_id": 0, "client_name": 1}))
+    industries = list(db.industries.find({}, {"_id": 0, "industry_name": 1}))
+    deliverables = list(db.deliverables.find({}, {"_id": 0, "deliverable_name": 1}))
 
     projects_master = list(
         db.projects_master.find(
@@ -110,9 +102,9 @@ def get_add_new():
         }
     }
 
-# -----------------------------
+# ---------------------------
 # POST /add-new
-# -----------------------------
+# ---------------------------
 
 @router.post("/add-new")
 async def add_new_project(
@@ -126,32 +118,25 @@ async def add_new_project(
     location_name: str = Form(...),
     location_url: str = Form(...),
     logo: UploadFile = File(...),
-    files: List[UploadFile] = File(...)):  
+    files: list[UploadFile] = File(...)
+):
 
     # Validate role
     if role not in ["super_admin", "admin", "user"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Role must be super_admin, admin, or user"
-        )
+        raise HTTPException(status_code=400, detail="Invalid role")
 
     # Validate email
     if "@" not in email_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid email format"
-        )
+        raise HTTPException(status_code=400, detail="Invalid email")
 
-    # Validate logo
+    # Validate logo format
     if not logo.filename.lower().endswith(".jpg"):
-        raise HTTPException(
-            status_code=400,
-            detail="Logo must be a .jpg file"
-        )
+        raise HTTPException(status_code=400, detail="Logo must be .jpg")
 
-    # -----------------------------
-    # Upload logo
-    # -----------------------------
+    # ---------------------------
+    # Upload Logo
+    # ---------------------------
+
     logo_upload = cloudinary.uploader.upload(
         await logo.read(),
         folder="add_new/logos"
@@ -159,9 +144,10 @@ async def add_new_project(
 
     logo_url = logo_upload["secure_url"]
 
-    # -----------------------------
-    # Upload project files
-    # -----------------------------
+    # ---------------------------
+    # Upload Project Files
+    # ---------------------------
+
     uploaded_files = []
 
     for file in files:
@@ -174,9 +160,9 @@ async def add_new_project(
 
         uploaded_files.append(result["secure_url"])
 
-    # -----------------------------
-    # CLIENT
-    # -----------------------------
+    # ---------------------------
+    # CLIENT LOGIC
+    # ---------------------------
 
     existing_client = db.clients.find_one({"email_id": email_id})
 
@@ -217,9 +203,9 @@ async def add_new_project(
             }
         )
 
-    # -----------------------------
-    # INDUSTRY
-    # -----------------------------
+    # ---------------------------
+    # INDUSTRY LOGIC
+    # ---------------------------
 
     industry = db.industries.find_one({"industry_name": industry_name})
 
@@ -235,20 +221,15 @@ async def add_new_project(
 
         industry_id = industry["_id"]
 
-    # -----------------------------
+    # ---------------------------
     # PROJECT MASTER
-    # -----------------------------
+    # ---------------------------
 
-    project = db.projects_master.find_one(
-        {"project_name": project_name}
-    )
+    project = db.projects_master.find_one({"project_name": project_name})
 
     if not project:
 
-        last_project = db.projects_master.find_one(
-            {},
-            sort=[("project_code", -1)]
-        )
+        last_project = db.projects_master.find_one({}, sort=[("project_code", -1)])
 
         number = 1
         if last_project:
@@ -273,9 +254,9 @@ async def add_new_project(
 
         project_id = project["_id"]
 
-    # -----------------------------
+    # ---------------------------
     # DELIVERABLE
-    # -----------------------------
+    # ---------------------------
 
     deliverable = db.deliverables.find_one(
         {"deliverable_name": deliverable_name}
