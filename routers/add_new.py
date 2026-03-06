@@ -119,7 +119,7 @@ async def add_new_project(
     location_name: str = Form(...),
     location_url: str = Form(...),
     logo: UploadFile = File(...),
-    files: List[UploadFile] = File(...)
+    files: UploadFile = File(...)
 ):
 
     # ---------------------------
