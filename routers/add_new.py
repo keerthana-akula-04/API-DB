@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from typing import List
+from typing import List, Annotated
 from datetime import datetime
 from database import db
 import cloudinary
@@ -119,7 +119,7 @@ async def add_new_project(
     location_name: str = Form(...),
     location_url: str = Form(...),
     logo: UploadFile = File(...),
-    files: List[UploadFile] = File(...)
+    files: Annotated[List[UploadFile], File(...)]
 ):
 
     # ---------------------------
