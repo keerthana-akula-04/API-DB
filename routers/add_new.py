@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from datetime import datetime
-from database import db
 from typing import List
+from database import db
 import cloudinary
 import cloudinary.uploader
 
@@ -16,8 +16,9 @@ cloudinary.config(
     api_key="your_api_key",
     api_secret="your_api_secret"
 )
+
 # ---------------------------
-# Helper Functions
+# Helper Builders
 # ---------------------------
 
 def build_client_doc(client_name, email_id, password, role, logo_url, number):
@@ -64,7 +65,7 @@ def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
         "deliverable_name": deliverable_name,
         "project_id": project_id,
         "industry_id": industry_id,
-        "deliverable_img_path": "",   # required field
+        "deliverable_img_path": "",
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
@@ -120,17 +121,17 @@ async def add_new_project(
     logo: UploadFile = File(...),
     files: List[UploadFile] = File(...)
 ):
-    
 
-    # Validate role
+    # ---------------------------
+    # VALIDATION
+    # ---------------------------
+
     if role not in ["super_admin", "admin", "user"]:
         raise HTTPException(status_code=400, detail="Invalid role")
 
-    # Validate email
     if "@" not in email_id:
         raise HTTPException(status_code=400, detail="Invalid email")
 
-    # Validate logo format
     if not logo.filename.lower().endswith(".jpg"):
         raise HTTPException(status_code=400, detail="Logo must be .jpg")
 
@@ -162,7 +163,7 @@ async def add_new_project(
         uploaded_files.append(result["secure_url"])
 
     # ---------------------------
-    # CLIENT LOGIC
+    # CLIENT
     # ---------------------------
 
     existing_client = db.clients.find_one({"email_id": email_id})
@@ -172,22 +173,22 @@ async def add_new_project(
         last_client = db.clients.find_one({}, sort=[("client_code", -1)])
 
         number = 1
-        if last_client and "client_code" in last_client:
+        if last_client:
             try:
                 number = int(last_client["client_code"].split("_")[1]) + 1
             except:
                 number = 1
 
-        client_doc = build_client_doc(
-            client_name,
-            email_id,
-            password,
-            role,
-            logo_url,
-            number
+        db.clients.insert_one(
+            build_client_doc(
+                client_name,
+                email_id,
+                password,
+                role,
+                logo_url,
+                number
+            )
         )
-
-        db.clients.insert_one(client_doc)
 
     else:
 
@@ -205,7 +206,7 @@ async def add_new_project(
         )
 
     # ---------------------------
-    # INDUSTRY LOGIC
+    # INDUSTRY
     # ---------------------------
 
     industry = db.industries.find_one({"industry_name": industry_name})
@@ -219,11 +220,10 @@ async def add_new_project(
         industry_id = result.inserted_id
 
     else:
-
         industry_id = industry["_id"]
 
     # ---------------------------
-    # PROJECT MASTER
+    # PROJECT
     # ---------------------------
 
     project = db.projects_master.find_one({"project_name": project_name})
@@ -252,7 +252,6 @@ async def add_new_project(
         project_id = result.inserted_id
 
     else:
-
         project_id = project["_id"]
 
     # ---------------------------
