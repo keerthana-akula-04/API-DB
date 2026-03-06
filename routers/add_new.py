@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from datetime import datetime
 from typing import List
+from datetime import datetime
 from database import db
 import cloudinary
 import cloudinary.uploader
@@ -119,7 +119,7 @@ async def add_new_project(
     location_name: str = Form(...),
     location_url: str = Form(...),
     logo: UploadFile = File(...),
-    files: UploadFile = File(...)
+    files: List[UploadFile] = File(...)
 ):
 
     # ---------------------------
@@ -152,6 +152,10 @@ async def add_new_project(
 
     uploaded_files = []
 
+    # safety check for single file
+    if not isinstance(files, list):
+        files = [files]
+
     for file in files:
 
         result = cloudinary.uploader.upload(
@@ -163,7 +167,7 @@ async def add_new_project(
         uploaded_files.append(result["secure_url"])
 
     # ---------------------------
-    # CLIENT
+    # CLIENT LOGIC
     # ---------------------------
 
     existing_client = db.clients.find_one({"email_id": email_id})
