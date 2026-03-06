@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from datetime import datetime
 from database import db
+from typing import List
 import cloudinary
 import cloudinary.uploader
 
@@ -118,8 +119,7 @@ async def add_new_project(
     location_name: str = Form(...),
     location_url: str = Form(...),
     logo: UploadFile = File(...),
-    files: list[UploadFile] = File(...)
-):
+    files: List[UploadFile] = File(...)):
 
     # Validate role
     if role not in ["super_admin", "admin", "user"]:
