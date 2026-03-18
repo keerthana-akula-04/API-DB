@@ -1,12 +1,18 @@
 from database import get_db
 
 
-async def build_dashboard_response():
+async def build_dashboard_response(current_user):
     db = get_db()
 
-    # 1️.ADMIN DASHBOARD COUNTS
+    # 🔐 ALWAYS HIDE SUPER_ADMIN
+    match_filter = {
+        "status": "Active",
+        "role": {"$ne": "super_admin"}  # ❌ exclude super_admin always
+    }
 
-    total_clients = await db["clients"].count_documents({"status": "Active"})
+    # 1️⃣ ADMIN DASHBOARD COUNTS
+
+    total_clients = await db["clients"].count_documents(match_filter)
     total_industries = await db["industries"].count_documents({})
     total_projects = await db["projects_master"].count_documents({})
 
@@ -29,7 +35,7 @@ async def build_dashboard_response():
         "planningProjects": planning_projects
     }
 
-    # 2️. GLOBAL INDUSTRIES
+    # 2️⃣ GLOBAL INDUSTRIES
 
     industries_raw = await db["industries"].find(
         {},
@@ -50,7 +56,7 @@ async def build_dashboard_response():
         for i in industries_raw
     ]
 
-    # 3️. RECENT PROJECTS
+    # 3️⃣ RECENT PROJECTS
 
     recent_raw = await db["projects_master"].find(
         {"created_at": {"$exists": True}},
@@ -81,10 +87,10 @@ async def build_dashboard_response():
         for p in recent_raw
     ]
 
-    # 4️. CLIENTS WITH PROPER $LOOKUP JOIN
+    # 4️⃣ CLIENTS WITH ROLE FILTER
 
     pipeline = [
-        {"$match": {"status": "Active"}},
+        {"$match": match_filter},  # ✅ super_admin excluded here
 
         {
             "$lookup": {
@@ -131,7 +137,6 @@ async def build_dashboard_response():
 
         industries_group = {}
 
-        # Process project links
         for link in client.get("project_links", []):
 
             industry = next(
@@ -153,7 +158,7 @@ async def build_dashboard_response():
             )
 
             if not industry:
-                continue  # skip if industry not found
+                continue
 
             industry_id = industry["_id"]
 
@@ -167,6 +172,7 @@ async def build_dashboard_response():
 
             if project:
                 project_id = project["_id"]
+
                 if project_id not in industries_group[industry_id]["projects"]:
                     industries_group[industry_id]["projects"][project_id] = {
                         "id": project.get("project_code", ""),
@@ -186,15 +192,16 @@ async def build_dashboard_response():
                         if deliverable.get("created_at") else ""
                     })
 
-        # Ensure industries appear even if no projects exist
+        # Ensure industries even if no projects
         for industry in client.get("industry_details", []):
             industry_id = industry["_id"]
+
             if industry_id not in industries_group:
                 industries_group[industry_id] = {
                     "id": industry.get("industry_code", ""),
                     "name": industry.get("industry_name", ""),
                     "img": industry.get("industry_image_url", ""),
-                    "projects": []  # explicitly empty list
+                    "projects": []
                 }
 
         industries_list = []
@@ -210,7 +217,7 @@ async def build_dashboard_response():
             "industries": industries_list
         })
 
-    # 5️ FINAL RESPONSE
+    # 5️⃣ FINAL RESPONSE
 
     return {
         "admin_dashboard": admin_dashboard,
@@ -218,7 +225,3 @@ async def build_dashboard_response():
         "industries": industries,
         "recent_projects": recent_projects
     }
-
-
-
-    
