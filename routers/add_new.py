@@ -7,8 +7,10 @@ import cloudinary.uploader
 router = APIRouter()
 
 # ---------------------------
-# Cloudinary Config
+# CONFIG
 # ---------------------------
+
+ALLOWED_ROLES = ["super_admin", "admin", "user", "pilot"]
 
 cloudinary.config(
     cloud_name="your_cloud_name",
@@ -17,8 +19,23 @@ cloudinary.config(
 )
 
 # ---------------------------
-# Helper Builders
+# HELPERS
 # ---------------------------
+
+def validate_role(role: str):
+    if role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+
+def validate_email(email: str):
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email")
+
+
+def validate_logo(logo: UploadFile):
+    if not logo.filename.lower().endswith((".jpg", ".jpeg", ".png")):
+        raise HTTPException(status_code=400, detail="Logo must be JPG/PNG")
+
 
 def build_client_doc(client_name, email_id, password, role, logo_url, number):
     return {
@@ -70,6 +87,25 @@ def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
     }
 
 
+def get_next_sequence(collection, field_prefix):
+    last = collection.find_one({}, sort=[(field_prefix, -1)])
+    number = 1
+    if last:
+        try:
+            number = int(last[field_prefix].split("_")[1]) + 1
+        except:
+            number = 1
+    return number
+
+
+async def upload_to_cloudinary(file: UploadFile, folder: str):
+    result = cloudinary.uploader.upload(
+        await file.read(),
+        folder=folder,
+        resource_type="auto"
+    )
+    return result["secure_url"]
+
 # ---------------------------
 # GET /add-new
 # ---------------------------
@@ -103,7 +139,6 @@ def get_add_new():
         }
     }
 
-
 # ---------------------------
 # POST /add-new
 # ---------------------------
@@ -120,50 +155,35 @@ async def add_new_project(
     location_name: str = Form(...),
     location_url: str = Form(...),
     logo: UploadFile = File(...),
-    files: UploadFile = File(...)
+    files: list[UploadFile] = File(...)
 ):
 
     # ---------------------------
     # VALIDATION
     # ---------------------------
 
-    if role not in ["super_admin", "admin", "user"]:
-        raise HTTPException(status_code=400, detail="Invalid role")
-
-    if "@" not in email_id:
-        raise HTTPException(status_code=400, detail="Invalid email")
-
-    if not logo.filename.lower().endswith(".jpg"):
-        raise HTTPException(status_code=400, detail="Logo must be .jpg")
+    validate_role(role)
+    validate_email(email_id)
+    validate_logo(logo)
 
     # ---------------------------
-    # Upload Logo
+    # UPLOAD LOGO
     # ---------------------------
 
-    logo_upload = cloudinary.uploader.upload(
-        await logo.read(),
-        folder="add_new/logos"
-    )
-
-    logo_url = logo_upload["secure_url"]
+    logo_url = await upload_to_cloudinary(logo, "add_new/logos")
 
     # ---------------------------
-    # Upload Project Files
+    # UPLOAD FILES
     # ---------------------------
 
     uploaded_files = []
 
-    files_list = [files]  # convert to list
-
-    for file in files_list:
-
-        result = cloudinary.uploader.upload(
-            await file.read(),
-            folder=f"add_new/projects/{project_name}",
-            resource_type="auto"
+    for file in files:
+        file_url = await upload_to_cloudinary(
+            file,
+            f"add_new/projects/{project_name}"
         )
-
-        uploaded_files.append(result["secure_url"])
+        uploaded_files.append(file_url)
 
     # ---------------------------
     # CLIENT
@@ -172,15 +192,7 @@ async def add_new_project(
     existing_client = db.clients.find_one({"email_id": email_id})
 
     if not existing_client:
-
-        last_client = db.clients.find_one({}, sort=[("client_code", -1)])
-
-        number = 1
-        if last_client:
-            try:
-                number = int(last_client["client_code"].split("_")[1]) + 1
-            except:
-                number = 1
+        number = get_next_sequence(db.clients, "client_code")
 
         db.clients.insert_one(
             build_client_doc(
@@ -192,9 +204,7 @@ async def add_new_project(
                 number
             )
         )
-
     else:
-
         db.clients.update_one(
             {"_id": existing_client["_id"]},
             {
@@ -215,13 +225,10 @@ async def add_new_project(
     industry = db.industries.find_one({"industry_name": industry_name})
 
     if not industry:
-
         result = db.industries.insert_one(
             build_industry_doc(industry_name)
         )
-
         industry_id = result.inserted_id
-
     else:
         industry_id = industry["_id"]
 
@@ -232,15 +239,7 @@ async def add_new_project(
     project = db.projects_master.find_one({"project_name": project_name})
 
     if not project:
-
-        last_project = db.projects_master.find_one({}, sort=[("project_code", -1)])
-
-        number = 1
-        if last_project:
-            try:
-                number = int(last_project["project_code"].split("_")[1]) + 1
-            except:
-                number = 1
+        number = get_next_sequence(db.projects_master, "project_code")
 
         result = db.projects_master.insert_one(
             build_project_doc(
@@ -251,9 +250,7 @@ async def add_new_project(
                 number
             )
         )
-
         project_id = result.inserted_id
-
     else:
         project_id = project["_id"]
 
@@ -266,18 +263,7 @@ async def add_new_project(
     )
 
     if not deliverable:
-
-        last_deliverable = db.deliverables.find_one(
-            {},
-            sort=[("deliverable_code", -1)]
-        )
-
-        number = 1
-        if last_deliverable:
-            try:
-                number = int(last_deliverable["deliverable_code"].split("_")[1]) + 1
-            except:
-                number = 1
+        number = get_next_sequence(db.deliverables, "deliverable_code")
 
         db.deliverables.insert_one(
             build_deliverable_doc(
