@@ -8,7 +8,10 @@ from auth.dependencies import get_current_user
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-# HELPER FUNCTION → Safe ObjectId Conversion
+# ---------------------------
+# HELPERS
+# ---------------------------
+
 def to_object_id(id_str: str, field_name: str):
     try:
         return ObjectId(id_str)
@@ -16,7 +19,24 @@ def to_object_id(id_str: str, field_name: str):
         raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
 
 
-# HELPER FUNCTION → Find Report By Filters
+def apply_role_filter(query: dict, user: dict):
+    role = user["role"]
+
+    # ✅ super_admin & admin → FULL ACCESS
+    if role in ["super_admin", "admin"]:
+        return query
+
+    # 🔸 pilot → only assigned reports
+    elif role == "pilot":
+        query["assigned_pilot"] = ObjectId(user["client_id"])
+
+    # 🔸 user → only own reports
+    elif role == "user":
+        query["client_id"] = ObjectId(user["client_id"])
+
+    return query
+
+
 async def find_report_by_filters(
     cols,
     user,
@@ -25,20 +45,15 @@ async def find_report_by_filters(
     deliverable_id,
     version
 ):
-    industry_obj = to_object_id(industry_id, "industry_id")
-    project_obj = to_object_id(project_id, "project_id")
-    deliverable_obj = to_object_id(deliverable_id, "deliverable_id")
-
     query = {
-        "industry_id": industry_obj,
-        "project_id": project_obj,
-        "deliverable_id": deliverable_obj,
+        "industry_id": to_object_id(industry_id, "industry_id"),
+        "project_id": to_object_id(project_id, "project_id"),
+        "deliverable_id": to_object_id(deliverable_id, "deliverable_id"),
         "version": version
     }
 
-    #Role Based Filtering
-    if user["role"] != "super_admin":
-        query["client_id"] = ObjectId(user["client_id"])
+    # ✅ Apply RBAC
+    query = apply_role_filter(query, user)
 
     report = await cols["reports"].find_one(query)
 
@@ -48,7 +63,9 @@ async def find_report_by_filters(
     return report
 
 
-# SINGLE DYNAMIC REPORTS ENDPOINT (CASCADING)
+# ---------------------------
+# MAIN ENDPOINT
+# ---------------------------
 
 @router.get("/")
 async def get_reports(
@@ -59,9 +76,11 @@ async def get_reports(
     user=Depends(get_current_user)
 ):
     cols = get_collections()
-    # STEP 1 → NO FILTER → RETURN INDUSTRIES
-    if not industry_id:
 
+    # ---------------------------
+    # STEP 1 → INDUSTRIES
+    # ---------------------------
+    if not industry_id:
         industries = await cols["industries"].find(
             {},
             {"_id": 1, "industry_name": 1}
@@ -73,9 +92,11 @@ async def get_reports(
                 for i in industries
             ]
         }
-    # STEP 2 → INDUSTRY SELECTED → RETURN PROJECTS
-    if industry_id and not project_id:
 
+    # ---------------------------
+    # STEP 2 → PROJECTS
+    # ---------------------------
+    if industry_id and not project_id:
         industry_obj = to_object_id(industry_id, "industry_id")
 
         projects = await cols["projects_master"].find(
@@ -90,9 +111,10 @@ async def get_reports(
             ]
         }
 
-    # STEP 3 → PROJECT SELECTED → RETURN DELIVERABLES
+    # ---------------------------
+    # STEP 3 → DELIVERABLES
+    # ---------------------------
     if industry_id and project_id and not deliverable_id:
-
         project_obj = to_object_id(project_id, "project_id")
 
         deliverables = await cols["deliverables"].find(
@@ -106,34 +128,33 @@ async def get_reports(
                 for d in deliverables
             ]
         }
-    # STEP 4 → DELIVERABLE SELECTED → RETURN VERSIONS
+
+    # ---------------------------
+    # STEP 4 → VERSIONS
+    # ---------------------------
     if industry_id and project_id and deliverable_id and version is None:
 
-        industry_obj = to_object_id(industry_id, "industry_id")
-        project_obj = to_object_id(project_id, "project_id")
-        deliverable_obj = to_object_id(deliverable_id, "deliverable_id")
-
         version_filter = {
-            "industry_id": industry_obj,
-            "project_id": project_obj,
-            "deliverable_id": deliverable_obj,
-            "version": {"$ne": None}  # 🔥 Exclude null versions
+            "industry_id": to_object_id(industry_id, "industry_id"),
+            "project_id": to_object_id(project_id, "project_id"),
+            "deliverable_id": to_object_id(deliverable_id, "deliverable_id"),
+            "version": {"$ne": None}
         }
 
-        # Role-based filtering
-        if user["role"] != "super_admin":
-            version_filter["client_id"] = ObjectId(user["client_id"])
+        # ✅ Apply RBAC here also
+        version_filter = apply_role_filter(version_filter, user)
 
         versions = await cols["reports"].distinct("version", version_filter)
 
-        # Remove None safely (double safety)
         versions = [v for v in versions if v is not None]
 
         return {
             "versions": sorted(versions) if versions else []
         }
 
-    # STEP 5 → ALL SELECTED → RETURN FINAL REPORT
+    # ---------------------------
+    # STEP 5 → FINAL REPORT
+    # ---------------------------
     if industry_id and project_id and deliverable_id and version is not None:
 
         report = await find_report_by_filters(
@@ -150,7 +171,10 @@ async def get_reports(
     raise HTTPException(status_code=400, detail="Invalid request parameters")
 
 
-#  REPORT + ANALYTICS (FULL DATA)
+# ---------------------------
+# ANALYTICS ENDPOINT
+# ---------------------------
+
 @router.get("/analytics")
 async def get_full_report(
     industry_id: str,
