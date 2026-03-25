@@ -7,6 +7,7 @@ from bson import ObjectId
 from database import get_collections
 
 security = HTTPBearer()
+a
 
 ALGORITHM = "HS256"
 IDLE_TIMEOUT_MINUTES = 120  # 1 hour

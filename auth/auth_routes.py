@@ -9,7 +9,7 @@ from database import get_collections
 from auth.auth_models import LoginRequest, RefreshRequest
 from auth.auth_service import create_access_token, create_refresh_token
 
-# SQLite imports
+# SQLite
 from sqlite_db import SessionLocal
 from auth.sqlite_session_model import Session as SQLiteSession
 
@@ -18,15 +18,10 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 IDLE_TIMEOUT_MINUTES = 120
 
-@router.get("/debug-sessions")
-def debug_sessions():
-    db_sqlite = SessionLocal()
-    sessions = db_sqlite.query(SQLiteSession).all()
-    db_sqlite.close()
-    return {"count": len(sessions)}
 
-
-#LOGIN 
+# ---------------------------
+# LOGIN (ROLE BASED)
+# ---------------------------
 @router.post("/login")
 async def login(data: LoginRequest):
 
@@ -37,19 +32,32 @@ async def login(data: LoginRequest):
         "status": "Active"
     })
 
+    # ❌ Invalid credentials
     if not user or user["password"] != data.password:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    # 🔥 ROLE VALIDATION (IMPORTANT)
+    db_role = user.get("role", "").strip().lower()
+    input_role = data.role.strip().lower()
+
+    if db_role != input_role:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You are not authorized to login as '{data.role}'"
+        )
+
+    # ✅ Generate tokens
     access_token = create_access_token({
         "sub": str(user["_id"]),
         "username": user["client_name"],
-        "role": user["role"]
+        "role": db_role
     })
 
     refresh_token = create_refresh_token({
         "sub": str(user["_id"])
     })
 
+    # Decode refresh token (for jti)
     decoded_refresh = jwt.decode(
         refresh_token,
         os.getenv("SECRET_KEY"),
@@ -58,7 +66,9 @@ async def login(data: LoginRequest):
 
     session_id = str(uuid.uuid4())
 
-    # Store Session in SQLite
+    # ---------------------------
+    # STORE SESSION (SQLite)
+    # ---------------------------
     db_sqlite = SessionLocal()
 
     new_session = SQLiteSession(
@@ -81,11 +91,14 @@ async def login(data: LoginRequest):
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": 900
+        "expires_in": 900,
+        "role": db_role   # optional (useful for frontend)
     }
 
 
-#REFRESH
+# ---------------------------
+# REFRESH TOKEN
+# ---------------------------
 @router.post("/refresh")
 async def refresh(data: RefreshRequest):
 
@@ -104,7 +117,6 @@ async def refresh(data: RefreshRequest):
         refresh_jti = payload.get("jti")
         client_id = payload.get("sub")
 
-        # Get Session from SQLite
         db_sqlite = SessionLocal()
 
         session = db_sqlite.query(SQLiteSession).filter(
@@ -117,19 +129,19 @@ async def refresh(data: RefreshRequest):
             db_sqlite.close()
             raise HTTPException(status_code=401, detail="Session not found")
 
-        # Idle Timeout Check
+        # Idle timeout
         if datetime.utcnow() - session.last_activity > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
             session.revoked = True
             db_sqlite.commit()
             db_sqlite.close()
-            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+            raise HTTPException(status_code=401, detail="Session expired")
 
-        # Update Last Activity
+        # Update activity
         session.last_activity = datetime.utcnow()
         db_sqlite.commit()
         db_sqlite.close()
 
-        # Fetch full user details from Mongo
+        # Get user
         user = await cols["clients"].find_one({"_id": ObjectId(client_id)})
 
         if not user:
@@ -150,7 +162,9 @@ async def refresh(data: RefreshRequest):
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
 
-#  LOGOUT 
+# ---------------------------
+# LOGOUT
+# ---------------------------
 @router.post("/logout")
 async def logout(data: RefreshRequest):
 
