@@ -19,21 +19,8 @@ def to_object_id(id_str: str, field_name: str):
         raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
 
 
+# 🔥 NO ROLE FILTER (ALL USERS CAN SEE ALL DATA)
 def apply_role_filter(query: dict, user: dict):
-    role = user["role"]
-
-    # ✅ super_admin & admin → FULL ACCESS
-    if role in ["super_admin", "admin"]:
-        return query
-
-    # 🔸 pilot → only assigned reports
-    elif role == "pilot":
-        query["assigned_pilot"] = ObjectId(user["client_id"])
-
-    # 🔸 user → only own reports
-    elif role == "user":
-        query["client_id"] = ObjectId(user["client_id"])
-
     return query
 
 
@@ -52,7 +39,7 @@ async def find_report_by_filters(
         "version": version
     }
 
-    # ✅ Apply RBAC
+    # ✅ No restriction applied
     query = apply_role_filter(query, user)
 
     report = await cols["reports"].find_one(query)
@@ -77,9 +64,7 @@ async def get_reports(
 ):
     cols = get_collections()
 
-    # ---------------------------
     # STEP 1 → INDUSTRIES
-    # ---------------------------
     if not industry_id:
         industries = await cols["industries"].find(
             {},
@@ -93,9 +78,7 @@ async def get_reports(
             ]
         }
 
-    # ---------------------------
     # STEP 2 → PROJECTS
-    # ---------------------------
     if industry_id and not project_id:
         industry_obj = to_object_id(industry_id, "industry_id")
 
@@ -111,9 +94,7 @@ async def get_reports(
             ]
         }
 
-    # ---------------------------
     # STEP 3 → DELIVERABLES
-    # ---------------------------
     if industry_id and project_id and not deliverable_id:
         project_obj = to_object_id(project_id, "project_id")
 
@@ -129,9 +110,7 @@ async def get_reports(
             ]
         }
 
-    # ---------------------------
     # STEP 4 → VERSIONS
-    # ---------------------------
     if industry_id and project_id and deliverable_id and version is None:
 
         version_filter = {
@@ -141,7 +120,7 @@ async def get_reports(
             "version": {"$ne": None}
         }
 
-        # ✅ Apply RBAC here also
+        # ✅ No role restriction
         version_filter = apply_role_filter(version_filter, user)
 
         versions = await cols["reports"].distinct("version", version_filter)
@@ -152,9 +131,7 @@ async def get_reports(
             "versions": sorted(versions) if versions else []
         }
 
-    # ---------------------------
     # STEP 5 → FINAL REPORT
-    # ---------------------------
     if industry_id and project_id and deliverable_id and version is not None:
 
         report = await find_report_by_filters(
