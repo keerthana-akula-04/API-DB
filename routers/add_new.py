@@ -167,6 +167,18 @@ async def add_new_project(
     validate_logo(logo)
 
     # ---------------------------
+    # CHECK UNIQUE EMAIL 🔥
+    # ---------------------------
+
+    existing_client = db.clients.find_one({"email_id": email_id})
+
+    if existing_client:
+        raise HTTPException(
+            status_code=409,
+            detail="User with this email already exists"
+        )
+
+    # ---------------------------
     # UPLOAD LOGO
     # ---------------------------
 
@@ -186,37 +198,21 @@ async def add_new_project(
         uploaded_files.append(file_url)
 
     # ---------------------------
-    # CLIENT
+    # CLIENT INSERT
     # ---------------------------
 
-    existing_client = db.clients.find_one({"email_id": email_id})
+    number = get_next_sequence(db.clients, "client_code")
 
-    if not existing_client:
-        number = get_next_sequence(db.clients, "client_code")
-
-        db.clients.insert_one(
-            build_client_doc(
-                client_name,
-                email_id,
-                password,
-                role,
-                logo_url,
-                number
-            )
+    db.clients.insert_one(
+        build_client_doc(
+            client_name,
+            email_id,
+            password,
+            role,
+            logo_url,
+            number
         )
-    else:
-        db.clients.update_one(
-            {"_id": existing_client["_id"]},
-            {
-                "$set": {
-                    "client_name": client_name,
-                    "password": password,
-                    "role": role,
-                    "logo_path": logo_url,
-                    "updated_at": datetime.utcnow()
-                }
-            }
-        )
+    )
 
     # ---------------------------
     # INDUSTRY
