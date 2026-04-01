@@ -13,23 +13,46 @@ cloudinary.config(
 )
 
 
+# 🔹 OPTIONAL: If frontend sends IDs → map to names
+industry_map = {
+    "IND_001": "Surveillance",
+    "IND_002": "Agriculture"
+}
+
+project_map = {
+    "PROJ_001": "CCTV Monitoring",
+    "PROJ_002": "Crop Analysis"
+}
+
+deliverable_map = {
+    "DEL_001": "Video Analysis",
+    "DEL_002": "Image Report"
+}
+
+
 async def send_pilot_email(data, files):
     try:
         uploaded_file_urls = []
 
-        # 📤 Upload files to Cloudinary
-        for file in files:
-            content = await file.read()
+        # 📤 Upload files safely
+        if files:
+            for file in files:
+                content = await file.read()
 
-            result = cloudinary.uploader.upload(
-                content,
-                resource_type="auto"
-            )
+                result = cloudinary.uploader.upload(
+                    content,
+                    resource_type="auto"
+                )
 
-            uploaded_file_urls.append(result["secure_url"])
+                uploaded_file_urls.append(result["secure_url"])
 
-        # 📄 Convert file URLs to plain text
+        # 📄 File links
         file_links = "\n".join(uploaded_file_urls) if uploaded_file_urls else "No files uploaded"
+
+        # 🔹 Handle dropdown values (ID → Name OR direct text)
+        industry = industry_map.get(data["industry"], data["industry"])
+        project = project_map.get(data["project"], data["project"])
+        deliverable = deliverable_map.get(data["deliverable"], data["deliverable"])
 
         # 📧 Email Content (PLAIN TEXT)
         text_content = f"""
@@ -48,9 +71,9 @@ Contact: {data['contact_number']}
 -------------------------------
 Mission Details:
 -------------------------------
-Industry: {data['industry']}
-Project: {data['project']}
-Deliverable: {data['deliverable']}
+Industry: {industry}
+Project: {project}
+Deliverable: {deliverable}
 Date: {data['mission_date']}
 Duration: {data['flight_duration']} minutes
 Weather: {data['weather_conditions']}
@@ -79,7 +102,7 @@ Akin Analytics Solutions
             to=[{"email": os.getenv("RECEIVER_EMAIL")}],
             sender={"email": os.getenv("SENDER_EMAIL")},
             subject=f"Pilot Mission Submission - {data['pilot_name']}",
-            text_content=text_content   # ✅ plain text
+            text_content=text_content
         )
 
         # 📤 Send Email

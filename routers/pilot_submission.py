@@ -4,28 +4,28 @@ from services.pilot_service import send_pilot_email
 
 router = APIRouter()
 
-router = APIRouter(tags=["Pilot Portal"])
-@router.post("/pilot-data")
+
+@router.post("/submit-pilot-data")
 async def submit_pilot_data(
-    #  Pilot Info
+    # 🔹 Pilot Info
     pilot_name: str = Form(...),
     license_number: str = Form(...),
     email: str = Form(...),
     contact_number: str = Form(...),
 
-    #  Mission Details
-    industry: str = Form(...),          
-    project: str = Form(...),           
-    deliverable: str = Form(...),       
+    # 🔹 Mission Details (Dropdown values)
+    industry: str = Form(...),
+    project: str = Form(...),
+    deliverable: str = Form(...),
     mission_date: str = Form(...),
     flight_duration: int = Form(...),
     weather_conditions: str = Form(...),
 
-    # Comments
+    # 🔹 Comments
     comments: str = Form(None),
 
-    # Files
-    files: List[UploadFile] = File(...)
+    # 🔹 Files (optional)
+    files: List[UploadFile] = File(None)
 ):
     data = {
         "pilot_name": pilot_name,
@@ -41,7 +41,9 @@ async def submit_pilot_data(
         "comments": comments
     }
 
-    #Send Email
+    print("📥 DATA RECEIVED:", data)  # 🔍 debug
+
+    # 📧 Send Email
     await send_pilot_email(data, files)
 
     return {
