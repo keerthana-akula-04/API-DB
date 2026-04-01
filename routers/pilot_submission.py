@@ -5,7 +5,7 @@ from services.pilot_service import send_pilot_email
 router = APIRouter()
 
 
-@router.post("/submit-pilot-data")
+@router.post("/pilot-data")
 async def submit_pilot_data(
     # 🔹 Pilot Info
     pilot_name: str = Form(...),
