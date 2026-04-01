@@ -13,10 +13,10 @@ async def submit_pilot_data(
     email: str = Form(...),
     contact_number: str = Form(...),
 
-    # 🔹 Mission Details (Dropdown values)
-    industry: str = Form(...),
-    project: str = Form(...),
-    deliverable: str = Form(...),
+    # 🔹 Mission Details (UPDATED FIELD NAMES)
+    industry_id: str = Form(...),
+    project_id: str = Form(...),
+    deliverable_id: str = Form(...),
     mission_date: str = Form(...),
     flight_duration: int = Form(...),
     weather_conditions: str = Form(...),
@@ -24,7 +24,7 @@ async def submit_pilot_data(
     # 🔹 Comments
     comments: str = Form(None),
 
-    # 🔹 Files (optional)
+    # 🔹 Files
     files: List[UploadFile] = File(None)
 ):
     data = {
@@ -32,9 +32,12 @@ async def submit_pilot_data(
         "license_number": license_number,
         "email": email,
         "contact_number": contact_number,
-        "industry": industry,
-        "project": project,
-        "deliverable": deliverable,
+
+        # ✅ map frontend names → backend keys
+        "industry": industry_id,
+        "project": project_id,
+        "deliverable": deliverable_id,
+
         "mission_date": mission_date,
         "flight_duration": flight_duration,
         "weather_conditions": weather_conditions,
@@ -42,7 +45,6 @@ async def submit_pilot_data(
     }
 
     print("📥 DATA RECEIVED:", data)
-    print("📂 FILES:", files)
 
     await send_pilot_email(data, files)
 
