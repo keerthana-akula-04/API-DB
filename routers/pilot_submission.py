@@ -41,9 +41,9 @@ async def submit_pilot_data(
         "comments": comments
     }
 
-    print("📥 DATA RECEIVED:", data)  # 🔍 debug
+    print("📥 DATA RECEIVED:", data)
+    print("📂 FILES:", files)
 
-    # 📧 Send Email
     await send_pilot_email(data, files)
 
     return {

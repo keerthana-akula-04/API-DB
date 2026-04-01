@@ -13,7 +13,7 @@ cloudinary.config(
 )
 
 
-# 🔹 OPTIONAL: If frontend sends IDs → map to names
+# 🔹 Optional: Dropdown ID → Name mapping
 industry_map = {
     "IND_001": "Surveillance",
     "IND_002": "Agriculture"
@@ -49,12 +49,12 @@ async def send_pilot_email(data, files):
         # 📄 File links
         file_links = "\n".join(uploaded_file_urls) if uploaded_file_urls else "No files uploaded"
 
-        # 🔹 Handle dropdown values (ID → Name OR direct text)
+        # 🔹 Handle dropdown values (ID or text)
         industry = industry_map.get(data["industry"], data["industry"])
         project = project_map.get(data["project"], data["project"])
         deliverable = deliverable_map.get(data["deliverable"], data["deliverable"])
 
-        # 📧 Email Content (PLAIN TEXT)
+        # 📧 Plain text email
         text_content = f"""
 Hello Team,
 
