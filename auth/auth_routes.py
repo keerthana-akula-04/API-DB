@@ -13,15 +13,12 @@ from auth.auth_service import create_access_token, create_refresh_token
 from sqlite_db import SessionLocal
 from auth.sqlite_session_model import Session as SQLiteSession
 
-
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 IDLE_TIMEOUT_MINUTES = 120
 
 
-# ---------------------------
-# LOGIN (ROLE BASED)
-# ---------------------------
+# LOGIN 
 @router.post("/login")
 async def login(data: LoginRequest):
 
@@ -32,11 +29,11 @@ async def login(data: LoginRequest):
         "status": "Active"
     })
 
-    # ❌ Invalid credentials
+    #  Invalid credentials
     if not user or user["password"] != data.password:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    # 🔥 ROLE VALIDATION (IMPORTANT)
+    #  ROLE VALIDATION 
     db_role = user.get("role", "").strip().lower()
     input_role = data.role.strip().lower()
 
@@ -46,7 +43,7 @@ async def login(data: LoginRequest):
             detail=f"You are not authorized to login as '{data.role}'"
         )
 
-    # ✅ Generate tokens
+    #  Generate tokens
     access_token = create_access_token({
         "sub": str(user["_id"]),
         "username": user["client_name"],
@@ -66,9 +63,7 @@ async def login(data: LoginRequest):
 
     session_id = str(uuid.uuid4())
 
-    # ---------------------------
     # STORE SESSION (SQLite)
-    # ---------------------------
     db_sqlite = SessionLocal()
 
     new_session = SQLiteSession(
@@ -83,6 +78,7 @@ async def login(data: LoginRequest):
         revoked=False
     )
 
+
     db_sqlite.add(new_session)
     db_sqlite.commit()
     db_sqlite.close()
@@ -92,13 +88,11 @@ async def login(data: LoginRequest):
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": 900,
-        "role": db_role   # optional (useful for frontend)
+        "role": db_role   
     }
 
 
-# ---------------------------
 # REFRESH TOKEN
-# ---------------------------
 @router.post("/refresh")
 async def refresh(data: RefreshRequest):
 
@@ -162,9 +156,7 @@ async def refresh(data: RefreshRequest):
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
 
-# ---------------------------
 # LOGOUT
-# ---------------------------
 @router.post("/logout")
 async def logout(data: RefreshRequest):
 
@@ -191,3 +183,6 @@ async def logout(data: RefreshRequest):
 
     except:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+

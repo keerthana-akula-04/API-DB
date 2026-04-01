@@ -8,9 +8,7 @@ from auth.dependencies import get_current_user
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-# ---------------------------
 # HELPERS
-# ---------------------------
 
 def to_object_id(id_str: str, field_name: str):
     try:
@@ -19,7 +17,7 @@ def to_object_id(id_str: str, field_name: str):
         raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
 
 
-# 🔥 NO ROLE FILTER (ALL USERS CAN SEE ALL DATA)
+#  NO ROLE FILTER 
 def apply_role_filter(query: dict, user: dict):
     return query
 
@@ -39,7 +37,7 @@ async def find_report_by_filters(
         "version": version
     }
 
-    # ✅ No restriction applied
+    #  No restriction applied
     query = apply_role_filter(query, user)
 
     report = await cols["reports"].find_one(query)
@@ -50,9 +48,7 @@ async def find_report_by_filters(
     return report
 
 
-# ---------------------------
 # MAIN ENDPOINT
-# ---------------------------
 
 @router.get("/")
 async def get_reports(
@@ -120,7 +116,7 @@ async def get_reports(
             "version": {"$ne": None}
         }
 
-        # ✅ No role restriction
+        #  No role restriction
         version_filter = apply_role_filter(version_filter, user)
 
         versions = await cols["reports"].distinct("version", version_filter)
@@ -148,9 +144,7 @@ async def get_reports(
     raise HTTPException(status_code=400, detail="Invalid request parameters")
 
 
-# ---------------------------
 # ANALYTICS ENDPOINT
-# ---------------------------
 
 @router.get("/analytics")
 async def get_full_report(

@@ -20,7 +20,7 @@ async def connect_to_mongo():
     global client, db
 
     if not MONGO_URI:
-        raise Exception("❌ MONGO_URI not set in environment variables")
+        raise Exception(" MONGO_URI not set in environment variables")
 
     client = AsyncIOMotorClient(
         MONGO_URI,
@@ -71,3 +71,4 @@ def get_collections():
         "deliverables": db_instance["deliverables"],
         "sessions_col": db_instance["sessions"]
     }
+

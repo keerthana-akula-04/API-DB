@@ -6,10 +6,6 @@ import cloudinary.uploader
 
 router = APIRouter()
 
-# ---------------------------
-# CONFIG
-# ---------------------------
-
 ALLOWED_ROLES = ["super_admin", "admin", "user", "pilot"]
 
 cloudinary.config(
@@ -17,10 +13,6 @@ cloudinary.config(
     api_key="your_api_key",
     api_secret="your_api_secret"
 )
-
-# ---------------------------
-# HELPERS
-# ---------------------------
 
 def validate_role(role: str):
     if role not in ALLOWED_ROLES:
@@ -106,10 +98,7 @@ async def upload_to_cloudinary(file: UploadFile, folder: str):
     )
     return result["secure_url"]
 
-# ---------------------------
-# GET /add-new
-# ---------------------------
-
+# GET /add-new 
 @router.get("/add-new")
 def get_add_new():
 
@@ -139,9 +128,7 @@ def get_add_new():
         }
     }
 
-# ---------------------------
 # POST /add-new
-# ---------------------------
 
 @router.post("/add-new")
 async def add_new_project(
@@ -158,18 +145,12 @@ async def add_new_project(
     files: list[UploadFile] = File(...)
 ):
 
-    # ---------------------------
     # VALIDATION
-    # ---------------------------
-
     validate_role(role)
     validate_email(email_id)
     validate_logo(logo)
 
-    # ---------------------------
-    # CHECK UNIQUE EMAIL 🔥
-    # ---------------------------
-
+    # CHECK UNIQUE EMAIL 
     existing_client = db.clients.find_one({"email_id": email_id})
 
     if existing_client:
@@ -178,16 +159,10 @@ async def add_new_project(
             detail="User with this email already exists"
         )
 
-    # ---------------------------
     # UPLOAD LOGO
-    # ---------------------------
-
     logo_url = await upload_to_cloudinary(logo, "add_new/logos")
 
-    # ---------------------------
     # UPLOAD FILES
-    # ---------------------------
-
     uploaded_files = []
 
     for file in files:
@@ -197,10 +172,7 @@ async def add_new_project(
         )
         uploaded_files.append(file_url)
 
-    # ---------------------------
     # CLIENT INSERT
-    # ---------------------------
-
     number = get_next_sequence(db.clients, "client_code")
 
     db.clients.insert_one(
@@ -214,10 +186,7 @@ async def add_new_project(
         )
     )
 
-    # ---------------------------
     # INDUSTRY
-    # ---------------------------
-
     industry = db.industries.find_one({"industry_name": industry_name})
 
     if not industry:
@@ -228,10 +197,7 @@ async def add_new_project(
     else:
         industry_id = industry["_id"]
 
-    # ---------------------------
     # PROJECT
-    # ---------------------------
-
     project = db.projects_master.find_one({"project_name": project_name})
 
     if not project:
@@ -250,10 +216,7 @@ async def add_new_project(
     else:
         project_id = project["_id"]
 
-    # ---------------------------
     # DELIVERABLE
-    # ---------------------------
-
     deliverable = db.deliverables.find_one(
         {"deliverable_name": deliverable_name}
     )
@@ -273,4 +236,54 @@ async def add_new_project(
     return {
         "message": "Project added successfully",
         "uploaded_files": uploaded_files
+    }
+
+
+@router.post("/register-pilot")
+async def register_pilot(
+    pilot_name: str = Form(...),
+    email_id: str = Form(...),
+    password: str = Form(...),
+    contact_number: str = Form(...),
+    license_number: str = Form(...)
+):
+
+    role = "pilot"
+
+    # VALIDATIONS
+    validate_role(role)
+    validate_email(email_id)
+
+    # CHECK DUPLICATE EMAIL
+    existing_client = db.clients.find_one({"email_id": email_id})
+    if existing_client:
+        raise HTTPException(
+            status_code=409,
+            detail="Pilot with this email already exists"
+        )
+
+    # GENERATE CLIENT CODE
+    number = get_next_sequence(db.clients, "client_code")
+
+    # BUILD DOCUMENT (AS PER YOUR CURRENT DB)
+    pilot_doc = {
+        "client_code": f"C_{number}",
+        "client_name": "",  # optional or keep empty
+        "pilot_name": pilot_name,  # ✅ important field
+        "email_id": email_id,
+        "password": password,
+        "role": role,
+        "contact_number": contact_number,
+        "license_number": license_number,
+        "status": "Active",
+        "logo_path": "",  # pilot may not have logo
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+
+    db.clients.insert_one(pilot_doc)
+
+    return {
+        "message": "Pilot registered successfully",
+        "client_code": pilot_doc["client_code"]
     }

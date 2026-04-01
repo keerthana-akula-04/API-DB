@@ -4,13 +4,13 @@ from database import get_db
 async def build_dashboard_response(current_user):
     db = get_db()
 
-    # 🔐 ALWAYS HIDE SUPER_ADMIN
+    # ALWAYS HIDE SUPER_ADMIN
     match_filter = {
         "status": "Active",
-        "role": {"$ne": "super_admin"}  # ❌ exclude super_admin always
+        "role": {"$ne": "super_admin"}  
     }
 
-    # 1️⃣ ADMIN DASHBOARD COUNTS
+    #  ADMIN DASHBOARD COUNTS
 
     total_clients = await db["clients"].count_documents(match_filter)
     total_industries = await db["industries"].count_documents({})
@@ -35,7 +35,7 @@ async def build_dashboard_response(current_user):
         "planningProjects": planning_projects
     }
 
-    # 2️⃣ GLOBAL INDUSTRIES
+    #  GLOBAL INDUSTRIES
 
     industries_raw = await db["industries"].find(
         {},
@@ -56,7 +56,7 @@ async def build_dashboard_response(current_user):
         for i in industries_raw
     ]
 
-    # 3️⃣ RECENT PROJECTS
+    #  RECENT PROJECTS
 
     recent_raw = await db["projects_master"].find(
         {"created_at": {"$exists": True}},
@@ -87,10 +87,10 @@ async def build_dashboard_response(current_user):
         for p in recent_raw
     ]
 
-    # 4️⃣ CLIENTS WITH ROLE FILTER
+    #  CLIENTS WITH ROLE FILTER
 
     pipeline = [
-        {"$match": match_filter},  # ✅ super_admin excluded here
+        {"$match": match_filter},  # super_admin excluded here
 
         {
             "$lookup": {
@@ -217,7 +217,7 @@ async def build_dashboard_response(current_user):
             "industries": industries_list
         })
 
-    # 5️⃣ FINAL RESPONSE
+    # FINAL RESPONSE
 
     return {
         "admin_dashboard": admin_dashboard,

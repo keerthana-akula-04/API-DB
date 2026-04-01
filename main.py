@@ -8,7 +8,9 @@ from auth.auth_routes import router as auth_router
 from routers import add_new
 from sqlite_db import engine
 from auth.sqlite_session_model import Base
+from routers import pilot_submission
 
+load_dotenv()
 Base.metadata.create_all(bind=engine)
 
 # Import routers
@@ -17,8 +19,6 @@ from routers import dashboard, reports, analytics, projects, alerts, admins
 import cloudinary
 
 app = FastAPI(title="AKIN WEB API")
-
-load_dotenv()
 
 # Cloudinary Config
 cloudinary.config(
@@ -55,4 +55,4 @@ app.include_router(projects.router)
 app.include_router(alerts.router)
 app.include_router(admins.router)
 app.include_router(add_new.router)
-
+app.include_router(pilot_submission.router)
