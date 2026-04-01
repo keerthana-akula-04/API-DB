@@ -13,18 +13,16 @@ async def submit_pilot_data(
     email: str = Form(...),
     contact_number: str = Form(...),
 
-    # 🔹 Mission Details (UPDATED FIELD NAMES)
+    # 🔹 Frontend sends IDs
     industry_id: str = Form(...),
     project_id: str = Form(...),
     deliverable_id: str = Form(...),
+
     mission_date: str = Form(...),
     flight_duration: int = Form(...),
     weather_conditions: str = Form(...),
 
-    # 🔹 Comments
     comments: str = Form(None),
-
-    # 🔹 Files
     files: List[UploadFile] = File(None)
 ):
     data = {
@@ -33,7 +31,7 @@ async def submit_pilot_data(
         "email": email,
         "contact_number": contact_number,
 
-        # ✅ map frontend names → backend keys
+        # 🔹 map IDs → generic keys
         "industry": industry_id,
         "project": project_id,
         "deliverable": deliverable_id,

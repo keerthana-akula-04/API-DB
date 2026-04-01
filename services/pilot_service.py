@@ -4,6 +4,12 @@ import cloudinary.uploader
 from sib_api_v3_sdk import Configuration, ApiClient, TransactionalEmailsApi
 from sib_api_v3_sdk.models import SendSmtpEmail
 
+from services.db_lookup import (
+    get_industry_name,
+    get_project_name,
+    get_deliverable_name
+)
+
 
 # 🔹 Cloudinary Config
 cloudinary.config(
@@ -11,23 +17,6 @@ cloudinary.config(
     api_key=os.getenv("CLOUDINARY_API_KEY"),
     api_secret=os.getenv("CLOUDINARY_API_SECRET")
 )
-
-
-# 🔹 Optional: Dropdown ID → Name mapping
-industry_map = {
-    "IND_001": "Surveillance",
-    "IND_002": "Agriculture"
-}
-
-project_map = {
-    "PROJ_001": "CCTV Monitoring",
-    "PROJ_002": "Crop Analysis"
-}
-
-deliverable_map = {
-    "DEL_001": "Video Analysis",
-    "DEL_002": "Image Report"
-}
 
 
 async def send_pilot_email(data, files):
@@ -49,12 +38,12 @@ async def send_pilot_email(data, files):
         # 📄 File links
         file_links = "\n".join(uploaded_file_urls) if uploaded_file_urls else "No files uploaded"
 
-        # 🔹 Handle dropdown values (ID or text)
-        industry = industry_map.get(data["industry"], data["industry"])
-        project = project_map.get(data["project"], data["project"])
-        deliverable = deliverable_map.get(data["deliverable"], data["deliverable"])
+        # 🔹 Convert IDs → Names
+        industry = await get_industry_name(data["industry"])
+        project = await get_project_name(data["project"])
+        deliverable = await get_deliverable_name(data["deliverable"])
 
-        # 📧 Plain text email
+        # 📧 Email Content (PLAIN TEXT)
         text_content = f"""
 Hello Team,
 
@@ -105,7 +94,6 @@ Akin Analytics Solutions
             text_content=text_content
         )
 
-        # 📤 Send Email
         response = api_instance.send_transac_email(email)
         print("✅ BREVO RESPONSE:", response)
 
