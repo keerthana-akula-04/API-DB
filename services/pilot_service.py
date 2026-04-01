@@ -28,43 +28,46 @@ async def send_pilot_email(data, files):
 
             uploaded_file_urls.append(result["secure_url"])
 
-        # 📄 Convert file URLs to HTML format
-        file_links = "<br>".join(uploaded_file_urls) if uploaded_file_urls else "No files uploaded"
+        # 📄 Convert file URLs to plain text
+        file_links = "\n".join(uploaded_file_urls) if uploaded_file_urls else "No files uploaded"
 
-        # 📧 Email Content (HTML)
-        html_content = f"""
-        <html>
-        <body>
-            <p>Hello Team,</p>
+        # 📧 Email Content (PLAIN TEXT)
+        text_content = f"""
+Hello Team,
 
-            <p>A pilot has uploaded mission data. Please review the details below.</p>
+A pilot has uploaded mission data. Please review the details below.
 
-            <h3>Pilot Information:</h3>
-            <p>
-            Name: {data['pilot_name']}<br>
-            License: {data['license_number']}<br>
-            Email: {data['email']}<br>
-            Contact: {data['contact_number']}
-            </p>
+-------------------------------
+Pilot Information:
+-------------------------------
+Name: {data['pilot_name']}
+License: {data['license_number']}
+Email: {data['email']}
+Contact: {data['contact_number']}
 
-            <h3>Mission Details:</h3>
-            <p>
-            Date: {data['mission_date']}<br>
-            Duration: {data['flight_duration']} minutes<br>
-            Weather: {data['weather_conditions']}
-            </p>
+-------------------------------
+Mission Details:
+-------------------------------
+Industry: {data['industry']}
+Project: {data['project']}
+Deliverable: {data['deliverable']}
+Date: {data['mission_date']}
+Duration: {data['flight_duration']} minutes
+Weather: {data['weather_conditions']}
 
-            <h3>Additional Comments:</h3>
-            <p>{data['comments']}</p>
+-------------------------------
+Additional Comments:
+-------------------------------
+{data['comments']}
 
-            <h3>Uploaded Files:</h3>
-            <p>{file_links}</p>
+-------------------------------
+Uploaded Files:
+-------------------------------
+{file_links}
 
-            <br>
-            <p>Regards,<br>Akin Analytics System</p>
-        </body>
-        </html>
-        """
+Regards,
+Akin Analytics Solutions
+"""
 
         # 🔹 Brevo Config
         configuration = Configuration()
@@ -73,13 +76,13 @@ async def send_pilot_email(data, files):
         api_instance = TransactionalEmailsApi(ApiClient(configuration))
 
         email = SendSmtpEmail(
-            to=[{"email": os.getenv("RECEIVER_EMAIL")}],  # 👈 IMPORTANT
+            to=[{"email": os.getenv("RECEIVER_EMAIL")}],
             sender={"email": os.getenv("SENDER_EMAIL")},
             subject=f"Pilot Mission Submission - {data['pilot_name']}",
-            html_content=html_content
+            text_content=text_content   # ✅ plain text
         )
 
-        # 📤 Send Email (with debug)
+        # 📤 Send Email
         response = api_instance.send_transac_email(email)
         print("✅ BREVO RESPONSE:", response)
 
