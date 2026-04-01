@@ -47,8 +47,9 @@ async def login(data: LoginRequest):
     access_token = create_access_token({
         "sub": str(user["_id"]),
         "username": user["client_name"],
-        "role": db_role
+        "role": db_role 
     })
+
 
     refresh_token = create_refresh_token({
         "sub": str(user["_id"])
