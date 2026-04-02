@@ -1,5 +1,5 @@
 from bson import ObjectId
-from database.mongo import db   # use your actual DB import
+from database import db 
 
 
 async def get_industry_name(industry_id: str):
