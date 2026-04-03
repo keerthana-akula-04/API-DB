@@ -4,15 +4,13 @@ from database import get_db
 async def build_dashboard_response(current_user):
     db = get_db()
 
-    # ALWAYS HIDE SUPER_ADMIN
     match_filter = {
         "status": "Active",
-        "role": {"$ne": "super_admin"}  
+        "role": "admin"
     }
 
-    #  ADMIN DASHBOARD COUNTS
-
     total_clients = await db["clients"].count_documents(match_filter)
+
     total_industries = await db["industries"].count_documents({})
     total_projects = await db["projects_master"].count_documents({})
 
@@ -35,8 +33,6 @@ async def build_dashboard_response(current_user):
         "planningProjects": planning_projects
     }
 
-    #  GLOBAL INDUSTRIES
-
     industries_raw = await db["industries"].find(
         {},
         {
@@ -55,8 +51,6 @@ async def build_dashboard_response(current_user):
         }
         for i in industries_raw
     ]
-
-    #  RECENT PROJECTS
 
     recent_raw = await db["projects_master"].find(
         {"created_at": {"$exists": True}},
@@ -87,10 +81,8 @@ async def build_dashboard_response(current_user):
         for p in recent_raw
     ]
 
-    #  CLIENTS WITH ROLE FILTER
-
     pipeline = [
-        {"$match": match_filter},  # super_admin excluded here
+        {"$match": match_filter},
 
         {
             "$lookup": {
@@ -100,7 +92,6 @@ async def build_dashboard_response(current_user):
                 "as": "project_links"
             }
         },
-
         {
             "$lookup": {
                 "from": "industries",
@@ -109,7 +100,6 @@ async def build_dashboard_response(current_user):
                 "as": "industry_details"
             }
         },
-
         {
             "$lookup": {
                 "from": "projects_master",
@@ -118,7 +108,6 @@ async def build_dashboard_response(current_user):
                 "as": "project_details"
             }
         },
-
         {
             "$lookup": {
                 "from": "deliverables",
@@ -134,7 +123,6 @@ async def build_dashboard_response(current_user):
     final_clients = []
 
     for client in clients_raw:
-
         industries_group = {}
 
         for link in client.get("project_links", []):
@@ -216,8 +204,6 @@ async def build_dashboard_response(current_user):
             "logo": client.get("logo_path", ""),
             "industries": industries_list
         })
-
-    # FINAL RESPONSE
 
     return {
         "admin_dashboard": admin_dashboard,
