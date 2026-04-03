@@ -9,3 +9,6 @@ python-multipart
 Cloudinary
 sqlalchemy==1.4.52
 sib-api-v3-sdk
+passlib[bcrypt]
+bcrypt
+email-validator
