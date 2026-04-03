@@ -95,8 +95,8 @@ Akin Analytics Solutions
         )
 
         response = api_instance.send_transac_email(email)
-        print("✅ BREVO RESPONSE:", response)
+        print("BREVO RESPONSE:", response)
 
     except Exception as e:
-        print("❌ BREVO ERROR:", str(e))
+        print("BREVO ERROR:", str(e))
         raise e
