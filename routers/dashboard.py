@@ -6,10 +6,6 @@ from auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
-
-# -------------------------------
-# 🔁 COMMON SERIALIZER
-# -------------------------------
 def serialize_mongo(document):
     if isinstance(document, list):
         return [serialize_mongo(doc) for doc in document]
@@ -25,22 +21,14 @@ def serialize_mongo(document):
 
     return document
 
-
-# -------------------------------
-# 📊 DASHBOARD LOGIC (MERGED)
-# -------------------------------
 async def build_dashboard_response(current_user):
     db = get_db()
 
-    # ✅ ONLY ADMIN USERS
     match_filter = {
         "status": "Active",
         "role": "admin"
     }
 
-    # -------------------------------
-    # 📊 COUNTS
-    # -------------------------------
     total_clients = await db["clients"].count_documents(match_filter)
     total_industries = await db["industries"].count_documents({})
     total_projects = await db["projects_master"].count_documents({})
@@ -64,9 +52,6 @@ async def build_dashboard_response(current_user):
         "planningProjects": planning_projects
     }
 
-    # -------------------------------
-    # 🏭 INDUSTRIES
-    # -------------------------------
     industries_raw = await db["industries"].find(
         {},
         {
@@ -86,9 +71,6 @@ async def build_dashboard_response(current_user):
         for i in industries_raw
     ]
 
-    # -------------------------------
-    # 🕒 RECENT PROJECTS
-    # -------------------------------
     recent_raw = await db["projects_master"].find(
         {"created_at": {"$exists": True}},
         {
@@ -118,9 +100,6 @@ async def build_dashboard_response(current_user):
         for p in recent_raw
     ]
 
-    # -------------------------------
-    # 👥 CLIENTS (ONLY ADMINS)
-    # -------------------------------
     pipeline = [
         {"$match": match_filter},
 
@@ -252,10 +231,6 @@ async def build_dashboard_response(current_user):
         "recent_projects": recent_projects
     }
 
-
-# -------------------------------
-# 🚀 ROUTES
-# -------------------------------
 
 # DASHBOARD SUMMARY
 @router.get("/")
