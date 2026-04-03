@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from passlib.context import CryptContext
 
@@ -16,19 +16,21 @@ def require_super_admin(user=Depends(get_current_user)):
     return user
 
 
-# 🔒 Password Hashing Setup
+# 🔒 Password Hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str):
     return pwd_context.hash(password)
 
 
-# 📥 Request Model for Admin Registration
+# 📥 Request Model (Frontend → Backend Mapping)
 class AdminRegisterRequest(BaseModel):
-    client_name: str
-    email_id: EmailStr
+    client_name: str = Field(..., alias="Client Name")
+    email_id: EmailStr = Field(..., alias="Email")
     password: str
+
+    class Config:
+        populate_by_name = True   # ✅ allows alias mapping
 
 
 # 📋 Get All Admins / Users / Pilots
@@ -57,18 +59,18 @@ async def get_admins(user=Depends(require_super_admin)):
 @router.post("/register")
 async def register_admin(
     data: AdminRegisterRequest,
-    user=Depends(require_super_admin)   # 🔐 Only admin/super_admin can create
+    user=Depends(require_super_admin)   # 🔐 only admin/super_admin
 ):
 
     cols = get_collections()
     clients_collection = cols["clients"]
 
-    # ❌ Check if email already exists
+    # ❌ Check duplicate email
     existing_user = await clients_collection.find_one({"email_id": data.email_id})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # ✅ Create new admin
+    # ✅ Create admin
     new_admin = {
         "client_name": data.client_name,
         "email_id": data.email_id,

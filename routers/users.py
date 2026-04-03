@@ -1,21 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 
 from database import get_collections
 from auth.dependencies import get_current_user
-from routers.admins import hash_password   # reuse existing function
+from utils.security import hash_password   # ✅ better than importing from admins
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
+# 📥 Request Model (Frontend → Backend Mapping)
 class UserRegisterRequest(BaseModel):
-    client_name: str | None = None
-    user_name: str
-    email_id: EmailStr
+    client_name: str | None = Field(default=None, alias="Client Name")
+    user_name: str = Field(..., alias="User Name")
+    email_id: EmailStr = Field(..., alias="Email")
     password: str
 
+    class Config:
+        populate_by_name = True   # ✅ important for alias mapping
 
+
+# 🚀 User Registration API
 @router.post("/register")
 async def register_user(
     data: UserRegisterRequest,
@@ -26,19 +31,29 @@ async def register_user(
 
     role = user.get("role")
 
-    # 🔐 Role-based logic
+    # 🔐 Role-based client_name handling
     if role == "super_admin":
         if not data.client_name:
-            raise HTTPException(status_code=400, detail="client_name is required")
+            raise HTTPException(status_code=400, detail="clientName is required")
         client_name = data.client_name
 
     elif role == "admin":
+        # 👇 auto-fill from logged-in admin
         client_name = user.get("client_name")
+
+        # fallback (if not in token)
+        if not client_name:
+            admin_data = await clients_collection.find_one(
+                {"email_id": user.get("email_id")}
+            )
+            if not admin_data:
+                raise HTTPException(status_code=404, detail="Admin not found")
+            client_name = admin_data.get("client_name")
 
     else:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # ❌ Duplicate check
+    # ❌ Check duplicate email
     existing_user = await clients_collection.find_one({"email_id": data.email_id})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
