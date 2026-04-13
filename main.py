@@ -10,6 +10,8 @@ from sqlite_db import engine
 from auth.sqlite_session_model import Base
 from routers import pilot_submission
 from routers import users
+from registrations import admin_registration
+from registrations import user_registration
 
 load_dotenv()
 Base.metadata.create_all(bind=engine)
@@ -58,3 +60,5 @@ app.include_router(admins.router)
 app.include_router(add_new.router)
 app.include_router(pilot_submission.router)
 app.include_router(users.router)
+app.include_router(admin_registration.router)
+app.include_router(user_registration.router, prefix="/users", tags=["Users"])
