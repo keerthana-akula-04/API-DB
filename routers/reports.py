@@ -48,8 +48,6 @@ async def find_report_by_filters(
     return report
 
 
-# MAIN ENDPOINT
-
 @router.get("/")
 async def get_reports(
     industry_id: str | None = None,
@@ -60,7 +58,6 @@ async def get_reports(
 ):
     cols = get_collections()
 
-    # STEP 1 → INDUSTRIES
     if not industry_id:
         industries = await cols["industries"].find(
             {},
@@ -74,7 +71,6 @@ async def get_reports(
             ]
         }
 
-    # STEP 2 → PROJECTS
     if industry_id and not project_id:
         industry_obj = to_object_id(industry_id, "industry_id")
 
@@ -90,7 +86,6 @@ async def get_reports(
             ]
         }
 
-    # STEP 3 → DELIVERABLES
     if industry_id and project_id and not deliverable_id:
         project_obj = to_object_id(project_id, "project_id")
 
@@ -106,7 +101,6 @@ async def get_reports(
             ]
         }
 
-    # STEP 4 → VERSIONS
     if industry_id and project_id and deliverable_id and version is None:
 
         version_filter = {
@@ -116,7 +110,6 @@ async def get_reports(
             "version": {"$ne": None}
         }
 
-        #  No role restriction
         version_filter = apply_role_filter(version_filter, user)
 
         versions = await cols["reports"].distinct("version", version_filter)
@@ -127,7 +120,6 @@ async def get_reports(
             "versions": sorted(versions) if versions else []
         }
 
-    # STEP 5 → FINAL REPORT
     if industry_id and project_id and deliverable_id and version is not None:
 
         report = await find_report_by_filters(
@@ -144,7 +136,6 @@ async def get_reports(
     raise HTTPException(status_code=400, detail="Invalid request parameters")
 
 
-# ANALYTICS ENDPOINT
 
 @router.get("/analytics")
 async def get_full_report(

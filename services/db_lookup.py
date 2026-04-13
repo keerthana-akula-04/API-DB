@@ -12,7 +12,7 @@ async def get_industry_name(industry_id: str):
 
 async def get_project_name(project_id: str):
     try:
-        project = await db["projects_master"].find_one({"_id": ObjectId(project_id)})  # ✅ FIXED
+        project = await db["projects_master"].find_one({"_id": ObjectId(project_id)})  
         return project["name"] if project else project_id
     except Exception:
         return project_id

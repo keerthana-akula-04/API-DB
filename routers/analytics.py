@@ -18,7 +18,6 @@ async def get_analytics(
 ):
     cols = get_collections()
 
-     # STEP 1 → NO FILTER → RETURN INDUSTRIES
     if not industry_id:
 
         industries = await cols["industries"].find(
@@ -33,7 +32,6 @@ async def get_analytics(
             ]
         }
 
-    # STEP 2 → INDUSTRY SELECTED → RETURN PROJECTS
     if industry_id and not project_id:
 
         try:
@@ -53,7 +51,6 @@ async def get_analytics(
             ]
         }
 
-    # STEP 3 → PROJECT SELECTED → RETURN DELIVERABLES
     if industry_id and project_id and not deliverable_id:
 
         try:
@@ -73,7 +70,6 @@ async def get_analytics(
             ]
         }
 
-    # STEP 4 → DELIVERABLE SELECTED → RETURN VERSIONS
     if industry_id and project_id and deliverable_id and version is None:
 
         try:
@@ -89,7 +85,6 @@ async def get_analytics(
             "deliverable_id": deliverable_obj
         }
 
-        # Role based filtering
         if user["role"] != "super_admin":
             version_filter["client_id"] = ObjectId(user["client_id"])
 
@@ -99,7 +94,6 @@ async def get_analytics(
             "versions": sorted(versions)
         }
 
-    # STEP 5 → ALL SELECTED → RETURN FINAL ANALYTICS
     if industry_id and project_id and deliverable_id and version is not None:
 
         report = await find_report_by_filters(

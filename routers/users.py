@@ -4,12 +4,11 @@ from datetime import datetime
 
 from database import get_collections
 from auth.dependencies import get_current_user
-from utils.security import hash_password   # ✅ better than importing from admins
+from utils.security import hash_password 
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-# 📥 Request Model (Frontend → Backend Mapping)
 class UserRegisterRequest(BaseModel):
     client_name: str | None = Field(default=None, alias="Client Name")
     user_name: str = Field(..., alias="User Name")
@@ -17,10 +16,9 @@ class UserRegisterRequest(BaseModel):
     password: str
 
     class Config:
-        populate_by_name = True   # ✅ important for alias mapping
+        populate_by_name = True  
 
 
-# 🚀 User Registration API
 @router.post("/register")
 async def register_user(
     data: UserRegisterRequest,
@@ -31,17 +29,14 @@ async def register_user(
 
     role = user.get("role")
 
-    # 🔐 Role-based client_name handling
     if role == "super_admin":
         if not data.client_name:
             raise HTTPException(status_code=400, detail="clientName is required")
         client_name = data.client_name
 
     elif role == "admin":
-        # 👇 auto-fill from logged-in admin
         client_name = user.get("client_name")
 
-        # fallback (if not in token)
         if not client_name:
             admin_data = await clients_collection.find_one(
                 {"email_id": user.get("email_id")}
@@ -53,12 +48,10 @@ async def register_user(
     else:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # ❌ Check duplicate email
     existing_user = await clients_collection.find_one({"email_id": data.email_id})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # ✅ Create user
     new_user = {
         "client_name": client_name,
         "user_name": data.user_name,

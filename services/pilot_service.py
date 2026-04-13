@@ -10,8 +10,6 @@ from services.db_lookup import (
     get_deliverable_name
 )
 
-
-# 🔹 Cloudinary Config
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
     api_key=os.getenv("CLOUDINARY_API_KEY"),
@@ -23,7 +21,6 @@ async def send_pilot_email(data, files):
     try:
         uploaded_file_urls = []
 
-        # 📤 Upload files safely
         if files:
             for file in files:
                 content = await file.read()
@@ -35,15 +32,12 @@ async def send_pilot_email(data, files):
 
                 uploaded_file_urls.append(result["secure_url"])
 
-        # 📄 File links
         file_links = "\n".join(uploaded_file_urls) if uploaded_file_urls else "No files uploaded"
 
-        # 🔹 Convert IDs → Names
         industry = await get_industry_name(data["industry"])
         project = await get_project_name(data["project"])
         deliverable = await get_deliverable_name(data["deliverable"])
 
-        # 📧 Email Content (PLAIN TEXT)
         text_content = f"""
 Hello Team,
 
@@ -81,7 +75,6 @@ Regards,
 Akin Analytics Solutions
 """
 
-        # 🔹 Brevo Config
         configuration = Configuration()
         configuration.api_key['api-key'] = os.getenv("BREVO_API_KEY")
 

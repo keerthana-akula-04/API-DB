@@ -7,13 +7,11 @@ router = APIRouter()
 
 @router.post("/pilot-data")
 async def submit_pilot_data(
-    # 🔹 Pilot Info
     pilot_name: str = Form(...),
     license_number: str = Form(...),
     email: str = Form(...),
     contact_number: str = Form(...),
 
-    # 🔹 Frontend sends IDs
     industry_id: str = Form(...),
     project_id: str = Form(...),
     deliverable_id: str = Form(...),
@@ -31,7 +29,6 @@ async def submit_pilot_data(
         "email": email,
         "contact_number": contact_number,
 
-        # 🔹 map IDs → generic keys
         "industry": industry_id,
         "project": project_id,
         "deliverable": deliverable_id,
@@ -42,7 +39,7 @@ async def submit_pilot_data(
         "comments": comments
     }
 
-    print("📥 DATA RECEIVED:", data)
+    print("DATA RECEIVED:", data)
 
     await send_pilot_email(data, files)
 
