@@ -11,9 +11,6 @@ async def build_dashboard_response(current_user):
 
     db = get_db()
 
-    # -------------------------------
-    # 🔹 DASHBOARD COUNTS
-    # -------------------------------
     total_clients = await db["clients"].count_documents({
         "status": "Active",
         "role": "admin"
@@ -43,9 +40,6 @@ async def build_dashboard_response(current_user):
         "planningProjects": planning_projects
     }
 
-    # -------------------------------
-    # 🔹 INDUSTRIES LIST
-    # -------------------------------
     industries_raw = await db["industries"].find().to_list(None)
 
     industries = [
@@ -57,9 +51,6 @@ async def build_dashboard_response(current_user):
         for i in industries_raw
     ]
 
-    # -------------------------------
-    # 🔹 RECENT PROJECTS
-    # -------------------------------
     recent_raw = await db["projects_master"].find(
         {"created_at": {"$exists": True}}
     ).sort("created_at", -1).limit(3).to_list(3)
@@ -78,10 +69,6 @@ async def build_dashboard_response(current_user):
         }
         for p in recent_raw
     ]
-
-    # -------------------------------
-    # 🔥 CLIENT HIERARCHY (FIXED)
-    # -------------------------------
 
     clients_data = await db["clients"].find(
         {"status": "Active", "role": "admin"}
@@ -154,7 +141,6 @@ async def build_dashboard_response(current_user):
                         if deliverable.get("created_at") else ""
                     })
 
-        # Convert nested dict → list
         industries_list = []
 
         for ind in industry_group.values():
@@ -168,9 +154,6 @@ async def build_dashboard_response(current_user):
             "industries": industries_list
         })
 
-    # -------------------------------
-    # FINAL RESPONSE
-    # -------------------------------
     return {
         "admin_dashboard": admin_dashboard,
         "clients": final_clients,
@@ -178,10 +161,6 @@ async def build_dashboard_response(current_user):
         "recent_projects": recent_projects
     }
 
-
-# -------------------------------
-# 🔹 ROUTES
-# -------------------------------
 
 @router.get("/")
 async def get_dashboard(user=Depends(get_current_user)):

@@ -4,9 +4,6 @@ from database import db
 
 router = APIRouter()
 
-# =========================================================
-# 📦 SCHEMA (Fixes Swagger + Matches Frontend Fields)
-# =========================================================
 class UserRegister(BaseModel):
     user_name: str = Field(..., alias="User Name")
     contact_name: str = Field(..., alias="Contact Name")
@@ -20,25 +17,21 @@ class UserRegister(BaseModel):
 class SuperAdminUserRegister(UserRegister):
     client_name: str = Field(..., alias="Client Name")
 
-
-# =========================================================
-# 🔹 COMMON FUNCTION
-# =========================================================
 def create_user_common(data, client_code):
 
-    # ✅ Check client exists
+    # Check client exists
     client = db.admins.find_one({"client_code": client_code})
     if not client:
         return {"error": "Invalid client"}
 
     client_name = client["client_name"]
 
-    # 🔍 Check duplicate email
+    # Check duplicate email
     existing = db.users.find_one({"email": data.email})
     if existing:
         return {"error": "User already exists"}
 
-    # 📦 Insert user
+    # Insert user
     user_data = {
         "client_code": client_code,
         "client_name": client_name,
@@ -58,13 +51,10 @@ def create_user_common(data, client_code):
     }
 
 
-# =========================================================
-# 🥇 SUPERADMIN USER REGISTRATION
-# =========================================================
 @router.post("/superadmin/register-user")
 def superadmin_register_user(data: SuperAdminUserRegister):
 
-    # 🔍 Find client using name
+    #  Find client using name
     client = db.admins.find_one({"client_name": data.client_name})
     if not client:
         return {"error": "Client not found"}
@@ -75,17 +65,14 @@ def superadmin_register_user(data: SuperAdminUserRegister):
     )
 
 
-# =========================================================
-# 🥈 ADMIN USER REGISTRATION (AUTO CLIENT FROM HEADERS)
-# =========================================================
 @router.post("/admin/register-user")
 def admin_register_user(request: Request, data: UserRegister):
 
-    # 🔥 Get client from headers (after login)
+    #  Get client from headers (after login)
     client_code = request.headers.get("client_code")
     role = request.headers.get("role")
 
-    # 🚫 Only admin allowed
+    #  Only admin allowed
     if role != "admin":
         return {"error": "Only admin can create users"}
 
