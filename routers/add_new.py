@@ -31,7 +31,7 @@ def validate_logo(logo: UploadFile):
 
 def build_client_doc(client_name, email_id, password, role, logo_url, number):
     return {
-        "client_code": f"C_{number:02d}",
+        "client_code": f"C_{number}",
         "client_name": client_name,
         "email_id": email_id,
         "password": password,
@@ -55,7 +55,7 @@ def build_industry_doc(industry_name):
 
 def build_project_doc(project_name, location_name, location_url, industry_id, number):
     return {
-        "project_code": f"PRJ_{number:02d}",
+        "project_code": f"PRJ_{number}",
         "project_name": project_name,
         "project_image_path": "",
         "location_name": location_name,
@@ -69,7 +69,7 @@ def build_project_doc(project_name, location_name, location_url, industry_id, nu
 
 def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
     return {
-        "deliverable_code": f"DEL_{number:02d}",
+        "deliverable_code": f"DEL_{number}",
         "deliverable_name": deliverable_name,
         "project_id": project_id,
         "industry_id": industry_id,
