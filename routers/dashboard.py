@@ -1,243 +1,178 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends
+from database import get_db, get_collections
+from bson import ObjectId
 from datetime import datetime
-from database import db
-import cloudinary
-import cloudinary.uploader
+from auth.dependencies import get_current_user
 
-router = APIRouter()
-
-ALLOWED_ROLES = ["super_admin", "admin", "user", "pilot"]
-
-cloudinary.config(
-    cloud_name="your_cloud_name",
-    api_key="your_api_key",
-    api_secret="your_api_secret"
-)
+router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
-# ---------------- VALIDATIONS ---------------- #
+async def build_dashboard_response(current_user):
 
-def validate_role(role: str):
-    if role not in ALLOWED_ROLES:
-        raise HTTPException(status_code=400, detail="Invalid role")
+    db = get_db()
 
-
-def validate_email(email: str):
-    if "@" not in email:
-        raise HTTPException(status_code=400, detail="Invalid email")
-
-
-def validate_logo(logo: UploadFile):
-    if not logo.filename.lower().endswith((".jpg", ".jpeg", ".png")):
-        raise HTTPException(status_code=400, detail="Logo must be JPG/PNG")
-
-
-# ---------------- BUILD DOCS ---------------- #
-
-def build_client_doc(client_name, email_id, password, role, logo_url, number):
-    return {
-        "client_code": f"C_{number:02d}",
-        "client_name": client_name,
-        "email_id": email_id,
-        "password": password,
-        "role": role,
+    total_clients = await db["clients"].count_documents({
         "status": "Active",
-        "logo_path": logo_url,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-
-
-def build_industry_doc(industry_name):
-    return {
-        "industry_code": industry_name[:3].upper(),
-        "industry_name": industry_name,
-        "industry_image_url": "",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-
-
-def build_project_doc(project_name, location_name, location_url, industry_id, number, uploaded_files):
-    return {
-        "project_code": f"PRJ_{number:02d}",
-        "project_name": project_name,
-        "project_image_path": uploaded_files,  # ✅ FIXED
-        "location_name": location_name,
-        "location_url": location_url,
-        "industry_id": industry_id,
-        "status": "Planning",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-
-
-def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
-    return {
-        "deliverable_code": f"DEL_{number:02d}",
-        "deliverable_name": deliverable_name,
-        "project_id": project_id,
-        "industry_id": industry_id,
-        "deliverable_img_path": "",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-
-
-# ✅ NEW FUNCTION (IMPORTANT)
-def build_projects_client_doc(
-    client_id,
-    project_id,
-    industry_id,
-    deliverable_id,
-    project_name,
-    location_name,
-    location_url
-):
-    return {
-        "client_id": client_id,
-        "project_id": project_id,
-        "industry_id": industry_id,
-        "deliverable_id": deliverable_id,
-        "project_name": project_name,
-        "location": location_name,
-        "location_url": location_url,
-        "status": "Planning",
-        "progress": 10,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-
-
-# ---------------- HELPERS ---------------- #
-
-def get_next_sequence(collection, field_prefix):
-    last = collection.find_one({}, sort=[(field_prefix, -1)])
-    number = 1
-    if last:
-        try:
-            number = int(last[field_prefix].split("_")[1]) + 1
-        except:
-            number = 1
-    return number
-
-
-async def upload_to_cloudinary(file: UploadFile, folder: str):
-    result = cloudinary.uploader.upload(
-        await file.read(),
-        folder=folder,
-        resource_type="auto"
-    )
-    return result["secure_url"]
-
-
-# ---------------- MAIN API ---------------- #
-
-@router.post("/add-new")
-async def add_new_project(
-    client_name: str = Form(...),
-    email_id: str = Form(...),
-    password: str = Form(...),
-    role: str = Form(...),
-    industry_name: str = Form(...),
-    deliverable_name: str = Form(...),
-    project_name: str = Form(...),
-    location_name: str = Form(...),
-    location_url: str = Form(...),
-    logo: UploadFile = File(...),
-    files: list[UploadFile] = File(...)
-):
-
-    # VALIDATION
-    validate_role(role)
-    validate_email(email_id)
-    validate_logo(logo)
-
-    # UNIQUE EMAIL CHECK
-    if db.clients.find_one({"email_id": email_id}):
-        raise HTTPException(status_code=409, detail="Email already exists")
-
-    # UPLOAD LOGO
-    logo_url = await upload_to_cloudinary(logo, "add_new/logos")
-
-    # UPLOAD FILES
-    uploaded_files = []
-    for file in files:
-        file_url = await upload_to_cloudinary(
-            file,
-            f"add_new/projects/{project_name}"
-        )
-        uploaded_files.append(file_url)
-
-    # CLIENT INSERT
-    client_number = get_next_sequence(db.clients, "client_code")
-    client_result = db.clients.insert_one(
-        build_client_doc(client_name, email_id, password, role, logo_url, client_number)
-    )
-    client_id = client_result.inserted_id
-
-    # INDUSTRY
-    industry = db.industries.find_one({"industry_name": industry_name})
-    if not industry:
-        result = db.industries.insert_one(build_industry_doc(industry_name))
-        industry_id = result.inserted_id
-    else:
-        industry_id = industry["_id"]
-
-    # PROJECT
-    project = db.projects_master.find_one({"project_name": project_name})
-    if not project:
-        project_number = get_next_sequence(db.projects_master, "project_code")
-        result = db.projects_master.insert_one(
-            build_project_doc(
-                project_name,
-                location_name,
-                location_url,
-                industry_id,
-                project_number,
-                uploaded_files
-            )
-        )
-        project_id = result.inserted_id
-    else:
-        project_id = project["_id"]
-
-    # DELIVERABLE
-    deliverable = db.deliverables.find_one({"deliverable_name": deliverable_name})
-    if not deliverable:
-        del_number = get_next_sequence(db.deliverables, "deliverable_code")
-        result = db.deliverables.insert_one(
-            build_deliverable_doc(
-                deliverable_name,
-                project_id,
-                industry_id,
-                del_number
-            )
-        )
-        deliverable_id = result.inserted_id
-    else:
-        deliverable_id = deliverable["_id"]
-
-    # ✅ INSERT INTO projects_client (MAIN REQUIREMENT)
-    existing = db.projects_client.find_one({
-        "client_id": client_id,
-        "project_id": project_id
+        "role": "admin"
     })
 
-    if not existing:
-        db.projects_client.insert_one(
-            build_projects_client_doc(
-                client_id,
-                project_id,
-                industry_id,
-                deliverable_id,
-                project_name,
-                location_name,
-                location_url
-            )
-        )
+    total_industries = await db["industries"].count_documents({})
+    total_projects = await db["projects_client"].count_documents({})
+
+    active_projects = await db["projects_client"].count_documents({
+        "status": "Inprogress"
+    })
+
+    completed_projects = await db["projects_client"].count_documents({
+        "status": "Completed"
+    })
+
+    planning_projects = await db["projects_client"].count_documents({
+        "status": "Planning"
+    })
+
+    admin_dashboard = {
+        "totalClients": total_clients,
+        "totalIndustries": total_industries,
+        "totalProjects": total_projects,
+        "activeProjects": active_projects,
+        "completedProjects": completed_projects,
+        "planningProjects": planning_projects
+    }
+
+    industries_raw = await db["industries"].find().to_list(None)
+
+    industries = [
+        {
+            "id": i.get("industry_code"),
+            "name": i.get("industry_name"),
+            "img": i.get("industry_image_url")
+        }
+        for i in industries_raw
+    ]
+
+    recent_raw = await db["projects_master"].find(
+        {"created_at": {"$exists": True}}
+    ).sort("created_at", -1).limit(3).to_list(3)
+
+    recent_projects = [
+        {
+            "id": p.get("project_code"),
+            "name": p.get("project_name"),
+            "industryId": str(p.get("industry_id")),
+            "clientId": "",
+            "location": p.get("location_name"),
+            "img": p.get("project_image_path"),
+            "date": p["created_at"].strftime("%Y-%m-%d")
+            if p.get("created_at") else "",
+            "status": p.get("status")
+        }
+        for p in recent_raw
+    ]
+
+    clients_data = await db["clients"].find(
+        {"status": "Active", "role": "admin"}
+    ).to_list(None)
+
+    projects_links = await db["projects_client"].find().to_list(None)
+
+    industries_map = {
+        i["_id"]: i for i in await db["industries"].find().to_list(None)
+    }
+
+    projects_map = {
+        p["_id"]: p for p in await db["projects_master"].find().to_list(None)
+    }
+
+    deliverables_map = {
+        d["_id"]: d for d in await db["deliverables"].find().to_list(None)
+    }
+
+    final_clients = []
+
+    for client in clients_data:
+        client_id = client["_id"]
+
+        # Filter projects for this client
+        client_links = [
+            p for p in projects_links if p["client_id"] == client_id
+        ]
+
+        industry_group = {}
+
+        for link in client_links:
+
+            industry = industries_map.get(link["industry_id"])
+            project = projects_map.get(link["project_id"])
+            deliverable = deliverables_map.get(link["deliverable_id"])
+
+            if not industry:
+                continue
+
+            ind_key = str(industry["_id"])
+
+            if ind_key not in industry_group:
+                industry_group[ind_key] = {
+                    "id": industry.get("industry_code"),
+                    "name": industry.get("industry_name"),
+                    "img": industry.get("industry_image_url"),
+                    "projects": {}
+                }
+
+            if project:
+                proj_key = str(project["_id"])
+
+                if proj_key not in industry_group[ind_key]["projects"]:
+                    industry_group[ind_key]["projects"][proj_key] = {
+                        "id": project.get("project_code"),
+                        "name": project.get("project_name"),
+                        "location": project.get("location_name"),
+                        "img": project.get("project_image_path"),
+                        "status": project.get("status"),
+                        "deliverables": []
+                    }
+
+                if deliverable:
+                    industry_group[ind_key]["projects"][proj_key]["deliverables"].append({
+                        "id": deliverable.get("deliverable_code"),
+                        "name": deliverable.get("deliverable_name"),
+                        "img": deliverable.get("deliverable_img_path"),
+                        "date": deliverable["created_at"].strftime("%Y-%m-%d")
+                        if deliverable.get("created_at") else ""
+                    })
+
+        industries_list = []
+
+        for ind in industry_group.values():
+            ind["projects"] = list(ind["projects"].values())
+            industries_list.append(ind)
+
+        final_clients.append({
+            "id": client.get("client_code"),
+            "name": client.get("client_name"),
+            "logo": client.get("logo_path"),
+            "industries": industries_list
+        })
 
     return {
-        "message": "Project added successfully",
-        "uploaded_files": uploaded_files
+        "admin_dashboard": admin_dashboard,
+        "clients": final_clients,
+        "industries": industries,
+        "recent_projects": recent_projects
     }
+
+
+@router.get("/")
+async def get_dashboard(user=Depends(get_current_user)):
+    return await build_dashboard_response(user)
+
+
+@router.get("/notifications")
+async def get_notifications(user=Depends(get_current_user)):
+    cols = get_collections()
+
+    notifications = await cols["notifications"].find().sort(
+        "created_at", -1
+    ).to_list(None)
+
+    return notifications
