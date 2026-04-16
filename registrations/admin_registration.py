@@ -22,6 +22,7 @@ async def get_admin_form_data(user=Depends(get_current_user)):
 
     if user.get("role") not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
+        
 
     cols = get_collections()
     clients_collection = cols["clients"]
