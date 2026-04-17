@@ -9,7 +9,7 @@ router = APIRouter(prefix="/admin", tags=["Registrations"])
 
 
 # =========================================================
-# 📦 SCHEMA
+# 📦 SCHEMA (ALIAS + FLEXIBLE INPUT)
 # =========================================================
 class AdminRegisterRequest(BaseModel):
     client_name: str = Field(..., alias="Client Name")
@@ -18,11 +18,11 @@ class AdminRegisterRequest(BaseModel):
     password: str = Field(..., alias="Password")
 
     class Config:
-        populate_by_name = True
+        populate_by_name = True   # ✅ allows both alias & normal names
 
 
 # =========================================================
-# 🔹 GET API (FIXED WITH INDUSTRIES COLLECTION)
+# 🔹 GET API → DROPDOWN DATA
 # =========================================================
 @router.get("/data")
 async def get_admin_form_data(user=Depends(get_current_user)):
@@ -33,7 +33,7 @@ async def get_admin_form_data(user=Depends(get_current_user)):
     cols = get_collections()
     clients_collection = cols["clients"]
     projects_collection = cols["projects_client"]
-    industries_collection = cols["industries"]  # ✅ NEW
+    industries_collection = cols["industries"]
 
     clients = await clients_collection.find().to_list(None)
     projects = await projects_collection.find().to_list(None)
@@ -90,7 +90,7 @@ async def get_admin_form_data(user=Depends(get_current_user)):
 
 
 # =========================================================
-# 🚀 POST API (FIXED INDUSTRY VALIDATION)
+# 🚀 POST API → REGISTER ADMIN
 # =========================================================
 @router.post("/register")
 async def register_admin(
@@ -119,7 +119,7 @@ async def register_admin(
     client_code = existing_client["client_code"]
 
     # =====================================================
-    # 2. USER LIMIT
+    # 2. USER LIMIT (MAX 10)
     # =====================================================
     user_count = await clients_collection.count_documents({
         "client_code": client_code
@@ -142,7 +142,7 @@ async def register_admin(
         raise HTTPException(400, "Email already registered")
 
     # =====================================================
-    # 4. GET INDUSTRY ID FROM NAME
+    # 4. GET INDUSTRY ID
     # =====================================================
     industry_doc = await industries_collection.find_one({
         "industry_name": data.industry_name
@@ -174,7 +174,13 @@ async def register_admin(
         )
 
     # =====================================================
-    # 6. CREATE ADMIN
+    # 6. PASSWORD VALIDATION
+    # =====================================================
+    if len(data.password) < 6:
+        raise HTTPException(400, "Password must be at least 6 characters")
+
+    # =====================================================
+    # 7. INSERT ADMIN
     # =====================================================
     new_admin = {
         "client_code": client_code,
