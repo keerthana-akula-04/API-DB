@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
 from database import get_collections
@@ -9,16 +9,13 @@ router = APIRouter(prefix="/admin", tags=["Registrations"])
 
 
 # =========================================================
-# 📦 SCHEMA (ALIAS + FLEXIBLE INPUT)
+# 📦 SCHEMA (NO ALIAS → FRONTEND FRIENDLY)
 # =========================================================
 class AdminRegisterRequest(BaseModel):
-    client_name: str = Field(..., alias="Client Name")
-    industry_name: str = Field(..., alias="Industry Name")
-    email_id: EmailStr = Field(..., alias="Email")
-    password: str = Field(..., alias="Password")
-
-    class Config:
-        populate_by_name = True   # ✅ allows both alias & normal names
+    client_name: str
+    industry_name: str
+    email_id: EmailStr
+    password: str
 
 
 # =========================================================
@@ -39,17 +36,13 @@ async def get_admin_form_data(user=Depends(get_current_user)):
     projects = await projects_collection.find().to_list(None)
     industries = await industries_collection.find().to_list(None)
 
-    # =====================================================
-    # 1. INDUSTRY MAP
-    # =====================================================
+    # 🔹 Industry map
     industry_map = {
         str(ind["_id"]): ind["industry_name"]
         for ind in industries
     }
 
-    # =====================================================
-    # 2. GROUP CLIENT IDS
-    # =====================================================
+    # 🔹 Group clients
     client_map = {}
 
     for c in clients:
@@ -62,9 +55,7 @@ async def get_admin_form_data(user=Depends(get_current_user)):
 
     result = []
 
-    # =====================================================
-    # 3. MAP CLIENT → INDUSTRY NAME
-    # =====================================================
+    # 🔹 Map client → industries
     for client_name, data in client_map.items():
 
         industries_list = []
@@ -119,17 +110,14 @@ async def register_admin(
     client_code = existing_client["client_code"]
 
     # =====================================================
-    # 2. USER LIMIT (MAX 10)
+    # 2. USER LIMIT
     # =====================================================
     user_count = await clients_collection.count_documents({
         "client_code": client_code
     })
 
     if user_count >= 10:
-        raise HTTPException(
-            status_code=400,
-            detail="Maximum 10 users allowed for this client"
-        )
+        raise HTTPException(400, "Maximum 10 users allowed for this client")
 
     # =====================================================
     # 3. EMAIL CHECK
