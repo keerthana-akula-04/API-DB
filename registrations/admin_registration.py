@@ -4,10 +4,13 @@ from datetime import datetime
 
 from database import get_collections
 from auth.dependencies import get_current_user
-from utils.security import hash_password
 
 router = APIRouter(prefix="/admin", tags=["Registrations"])
 
+
+# =========================================================
+# 📦 SCHEMA
+# =========================================================
 class AdminRegisterRequest(BaseModel):
     client_name: str = Field(..., alias="Client Name")
     industry_name: str = Field(..., alias="Industry Name")
@@ -17,21 +20,36 @@ class AdminRegisterRequest(BaseModel):
     class Config:
         populate_by_name = True
 
+
+# =========================================================
+# 🔹 GET API (FIXED WITH INDUSTRIES COLLECTION)
+# =========================================================
 @router.get("/data")
 async def get_admin_form_data(user=Depends(get_current_user)):
 
     if user.get("role") not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
-        
 
     cols = get_collections()
     clients_collection = cols["clients"]
     projects_collection = cols["projects_client"]
+    industries_collection = cols["industries"]  # ✅ NEW
 
     clients = await clients_collection.find().to_list(None)
     projects = await projects_collection.find().to_list(None)
+    industries = await industries_collection.find().to_list(None)
 
-    # Group clients by name
+    # =====================================================
+    # 1. INDUSTRY MAP
+    # =====================================================
+    industry_map = {
+        str(ind["_id"]): ind["industry_name"]
+        for ind in industries
+    }
+
+    # =====================================================
+    # 2. GROUP CLIENT IDS
+    # =====================================================
     client_map = {}
 
     for c in clients:
@@ -44,17 +62,25 @@ async def get_admin_form_data(user=Depends(get_current_user)):
 
     result = []
 
+    # =====================================================
+    # 3. MAP CLIENT → INDUSTRY NAME
+    # =====================================================
     for client_name, data in client_map.items():
 
-        industries = []
+        industries_list = []
 
         for p in projects:
             if p["client_id"] in data["client_ids"]:
-                industries.append(p["project_name"])
+
+                industry_id = str(p.get("industry_id"))
+                industry_name = industry_map.get(industry_id)
+
+                if industry_name:
+                    industries_list.append(industry_name)
 
         result.append({
             "client_name": client_name,
-            "industries": list(set(industries))
+            "industries": list(set(industries_list))
         })
 
     return {
@@ -62,6 +88,10 @@ async def get_admin_form_data(user=Depends(get_current_user)):
         "data": result
     }
 
+
+# =========================================================
+# 🚀 POST API (FIXED INDUSTRY VALIDATION)
+# =========================================================
 @router.post("/register")
 async def register_admin(
     data: AdminRegisterRequest,
@@ -74,8 +104,11 @@ async def register_admin(
     cols = get_collections()
     clients_collection = cols["clients"]
     projects_collection = cols["projects_client"]
+    industries_collection = cols["industries"]
 
-    # 1. VALIDATE CLIENT NAME
+    # =====================================================
+    # 1. VALIDATE CLIENT
+    # =====================================================
     existing_client = await clients_collection.find_one({
         "client_name": data.client_name
     })
@@ -85,7 +118,9 @@ async def register_admin(
 
     client_code = existing_client["client_code"]
 
-    # 2. USER LIMIT CHECK (MAX 10 USERS)
+    # =====================================================
+    # 2. USER LIMIT
+    # =====================================================
     user_count = await clients_collection.count_documents({
         "client_code": client_code
     })
@@ -96,7 +131,9 @@ async def register_admin(
             detail="Maximum 10 users allowed for this client"
         )
 
-    # 3. EMAIL UNIQUENESS CHECK
+    # =====================================================
+    # 3. EMAIL CHECK
+    # =====================================================
     existing_user = await clients_collection.find_one({
         "email_id": data.email_id
     })
@@ -104,7 +141,21 @@ async def register_admin(
     if existing_user:
         raise HTTPException(400, "Email already registered")
 
-    # 4. VALIDATE INDUSTRY (NO STORAGE)
+    # =====================================================
+    # 4. GET INDUSTRY ID FROM NAME
+    # =====================================================
+    industry_doc = await industries_collection.find_one({
+        "industry_name": data.industry_name
+    })
+
+    if not industry_doc:
+        raise HTTPException(400, "Invalid industry name")
+
+    industry_id = industry_doc["_id"]
+
+    # =====================================================
+    # 5. VALIDATE INDUSTRY ↔ CLIENT
+    # =====================================================
     client_records = await clients_collection.find({
         "client_name": data.client_name
     }).to_list(None)
@@ -112,23 +163,25 @@ async def register_admin(
     client_ids = [c["_id"] for c in client_records]
 
     valid_project = await projects_collection.find_one({
-        "project_name": data.industry_name,
+        "industry_id": industry_id,
         "client_id": {"$in": client_ids}
     })
 
     if not valid_project:
         raise HTTPException(
             status_code=400,
-            detail="Invalid industry for selected client"
+            detail="Industry not mapped to selected client"
         )
 
-    # 5. CREATE ADMIN (NO NEW FIELDS ADDED)
+    # =====================================================
+    # 6. CREATE ADMIN
+    # =====================================================
     new_admin = {
         "client_code": client_code,
         "client_name": data.client_name,
 
         "email_id": data.email_id,
-        "password":  data.password,
+        "password": data.password,
 
         "role": "admin",
         "status": "Active",
