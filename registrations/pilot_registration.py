@@ -9,14 +9,12 @@ router = APIRouter(prefix="/pilot", tags=["Registrations"])
 
 
 # =========================================================
-# 📦 SCHEMA
+# 📦 SCHEMA (NO CONTACT NUMBER)
 # =========================================================
 class PilotRegisterRequest(BaseModel):
     client_name: str = Field(..., alias="Client Name")
     industry_name: str = Field(..., alias="Industry Name")
     pilot_name: str = Field(..., alias="Pilot Name")
-
-    contact_number: str = Field(..., alias="Contact Number")
 
     drone_category: str = Field(..., alias="Drone Category")
 
@@ -50,13 +48,13 @@ async def get_pilot_form_data(user=Depends(get_current_user)):
     projects = await projects_collection.find().to_list(None)
     industries = await industries_collection.find().to_list(None)
 
-    # 🔹 Industry map
+    # Industry map
     industry_map = {
         str(ind["_id"]): ind["industry_name"]
         for ind in industries
     }
 
-    # 🔹 Group clients
+    # Group client_ids
     client_map = {}
 
     for c in clients:
@@ -69,7 +67,7 @@ async def get_pilot_form_data(user=Depends(get_current_user)):
 
     result = []
 
-    # 🔹 Map client → industries
+    # Map client → industries
     for client_name, data in client_map.items():
 
         industries_list = []
@@ -114,9 +112,7 @@ async def register_pilot(
     projects_collection = cols["projects_client"]
     industries_collection = cols["industries"]
 
-    # =====================================================
     # 1. VALIDATE CLIENT
-    # =====================================================
     existing_client = await clients_collection.find_one({
         "client_name": data.client_name
     })
@@ -126,9 +122,7 @@ async def register_pilot(
 
     client_code = existing_client["client_code"]
 
-    # =====================================================
     # 2. USER LIMIT
-    # =====================================================
     user_count = await clients_collection.count_documents({
         "client_code": client_code
     })
@@ -136,9 +130,7 @@ async def register_pilot(
     if user_count >= 10:
         raise HTTPException(400, "Maximum 10 users allowed for this client")
 
-    # =====================================================
     # 3. EMAIL CHECK
-    # =====================================================
     existing_user = await clients_collection.find_one({
         "email_id": data.email_id
     })
@@ -146,9 +138,7 @@ async def register_pilot(
     if existing_user:
         raise HTTPException(400, "Email already registered")
 
-    # =====================================================
     # 4. GET INDUSTRY ID
-    # =====================================================
     industry_doc = await industries_collection.find_one({
         "industry_name": data.industry_name
     })
@@ -158,9 +148,7 @@ async def register_pilot(
 
     industry_id = industry_doc["_id"]
 
-    # =====================================================
     # 5. VALIDATE INDUSTRY ↔ CLIENT
-    # =====================================================
     client_records = await clients_collection.find({
         "client_name": data.client_name
     }).to_list(None)
@@ -175,27 +163,15 @@ async def register_pilot(
     if not valid_project:
         raise HTTPException(400, "Industry not mapped to selected client")
 
-    # =====================================================
     # 6. PASSWORD VALIDATION
-    # =====================================================
     if len(data.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
 
-    # =====================================================
-    # 7. CONTACT NUMBER VALIDATION
-    # =====================================================
-    if not data.contact_number:
-        raise HTTPException(400, "Contact Number is required")
-
-    # =====================================================
-    # 8. LICENSE NUMBER VALIDATION
-    # =====================================================
+    # 7. LICENSE NUMBER VALIDATION
     if not data.license_number:
         raise HTTPException(400, "License Number is required")
 
-    # =====================================================
-    # 9. DRONE CATEGORY LOGIC (FIXED)
-    # =====================================================
+    # 8. DRONE CATEGORY LOGIC
     category = data.drone_category.strip().lower()
 
     if category not in ["small", "medium", "hybrid"]:
@@ -222,9 +198,7 @@ async def register_pilot(
         small_license = data.small_license_id
         medium_license = data.medium_license_id
 
-    # =====================================================
-    # 10. INSERT DATA (FIXED LOWERCASE)
-    # =====================================================
+    # 9. INSERT DATA
     new_pilot = {
         "client_code": client_code,
         "client_name": data.client_name,
@@ -236,9 +210,8 @@ async def register_pilot(
         "status": "Active",
 
         "pilot_name": data.pilot_name,
-        "contact_number": data.contact_number,
 
-        "drone_category": category,  # ✅ FIXED
+        "drone_category": category,
 
         "license_number": data.license_number,
 
@@ -260,7 +233,6 @@ async def register_pilot(
             "pilotId": str(result.inserted_id),
             "clientName": data.client_name,
             "pilotName": data.pilot_name,
-            "contactNumber": data.contact_number,
             "industryName": data.industry_name,
             "email": data.email_id
         }
