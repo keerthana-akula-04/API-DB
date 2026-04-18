@@ -7,10 +7,6 @@ from auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/admin", tags=["Registrations"])
 
-
-# =========================================================
-# 📦 SCHEMA
-# =========================================================
 class AdminRegisterRequest(BaseModel):
     client_name: str | None = None
     industry_name: str | None = None
@@ -29,9 +25,6 @@ class AdminRegisterRequest(BaseModel):
         }
 
 
-# =========================================================
-# 🔹 GET API → DROPDOWN DATA
-# =========================================================
 @router.get("/data")
 async def get_admin_form_data(user=Depends(get_current_user)):
 
@@ -90,10 +83,6 @@ async def get_admin_form_data(user=Depends(get_current_user)):
         "data": result
     }
 
-
-# =========================================================
-# 🚀 POST API → REGISTER ADMIN
-# =========================================================
 @router.post("/register")
 async def register_admin(
     request: Request,
@@ -101,13 +90,11 @@ async def register_admin(
     user=Depends(get_current_user)
 ):
 
-    # ================= DEBUG =================
-    print("\n🔴 RAW REQUEST BODY:")
+    print("\nRAW REQUEST BODY:")
     print(await request.body())
 
-    print("\n🟢 PARSED DATA:")
+    print("\nPARSED DATA:")
     print(data)
-    # ========================================
 
     if user.get("role") not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -175,9 +162,6 @@ async def register_admin(
             detail="Industry not mapped to selected client"
         )
 
-    # =====================================================
-    # ✅ INSERT ADMIN (STRICT)
-    # =====================================================
     new_admin = {
         "admin_name": data.name,
         "client_code": client_code,
@@ -194,10 +178,7 @@ async def register_admin(
     print("🟣 FINAL DOCUMENT:", new_admin)
 
     result = await clients_collection.insert_one(new_admin)
-
-    # =====================================================
-    # ✅ RESPONSE
-    # =====================================================
+    
     return {
         "status": "success",
         "message": "Admin registered successfully",
