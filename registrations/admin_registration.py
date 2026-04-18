@@ -4,6 +4,7 @@ from datetime import datetime
 
 from database import get_collections
 from auth.dependencies import get_current_user
+# from utils.security import hash_password  # (recommended)
 
 router = APIRouter(prefix="/admin", tags=["Registrations"])
 
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/admin", tags=["Registrations"])
 # 📦 SCHEMA
 # =========================================================
 class AdminRegisterRequest(BaseModel):
+    name: str   # ✅ UI field
     client_name: str
     industry_name: str
     email_id: EmailStr
@@ -106,8 +108,6 @@ async def register_admin(
         raise HTTPException(400, "Invalid client name")
 
     client_code = existing_client["client_code"]
-    admin_name = existing_client.get("admin_name", "")  # Get from existing client
-    logo_path = existing_client.get("logo_path", "")    # Get from existing client
 
     # 2. USER LIMIT
     user_count = await clients_collection.count_documents({
@@ -154,33 +154,39 @@ async def register_admin(
         )
 
     # =====================================================
-    # ✅ INSERT ADMIN (with industry_name, admin_name, logo_path)
+    # ✅ INSERT ADMIN
     # =====================================================
     new_admin = {
+        "admin_name": data.name,   # ✅ mapped field
+
         "client_code": client_code,
         "client_name": data.client_name,
-        "industry_name": data.industry_name,
+
         "email_id": data.email_id,
-        "password": data.password,
+        "password": data.password,  # ⚠️ use hash_password in production
+
         "role": "admin",
         "status": "Active",
-        "admin_name": admin_name,
-        "logo_path": logo_path,
+
+        "logo_path": existing_client.get("logo_path", ""),
+
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
 
     result = await clients_collection.insert_one(new_admin)
 
+    # =====================================================
+    # ✅ RESPONSE (AS PER YOUR REQUIREMENT)
+    # =====================================================
     return {
         "status": "success",
         "message": "Admin registered successfully",
         "data": {
-            "adminId": str(result.inserted_id),
-            "clientName": data.client_name,
-            "industryName": data.industry_name,
-            "adminName": admin_name,
-            "logoPath": logo_path,
-            "email": data.email_id
+            "client_name": data.client_name,
+            "industry_name": data.industry_name,
+            "Name": data.name,                 # ✅ UI format
+            "email_id": data.email_id,
+            "password": data.password          # ⚠️ not recommended
         }
     }
