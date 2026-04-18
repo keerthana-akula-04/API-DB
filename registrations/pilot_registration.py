@@ -31,6 +31,71 @@ class PilotRegisterRequest(BaseModel):
 
 
 # =========================================================
+# 🔹 GET API → DROPDOWN DATA
+# =========================================================
+@router.get("/data")
+async def get_pilot_form_data(user=Depends(get_current_user)):
+
+    if user.get("role") not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    cols = get_collections()
+    clients_collection = cols["clients"]
+    projects_collection = cols["projects_client"]
+    industries_collection = cols["industries"]
+
+    clients = await clients_collection.find().to_list(None)
+    projects = await projects_collection.find().to_list(None)
+    industries = await industries_collection.find().to_list(None)
+
+    # Industry map
+    industry_map = {
+        str(ind["_id"]): ind["industry_name"]
+        for ind in industries
+    }
+
+    # Group client_ids
+    client_map = {}
+
+    for c in clients:
+        name = c["client_name"]
+
+        if name not in client_map:
+            client_map[name] = {"client_ids": []}
+
+        client_map[name]["client_ids"].append(c["_id"])
+
+    result = []
+
+    # Map client → industries
+    for client_name, data in client_map.items():
+
+        industries_list = []
+
+        for p in projects:
+            if p["client_id"] in data["client_ids"]:
+
+                industry_id = str(p.get("industry_id"))
+                industry_name = industry_map.get(industry_id)
+
+                if industry_name:
+                    industries_list.append(industry_name)
+
+        result.append({
+            "client_name": client_name,
+            "industries": list(set(industries_list))
+        })
+
+    return {
+        "status": "success",
+        "data": {
+            "clients": result,
+            "drone_categories": ["Small", "Medium", "Hybrid"]
+        }
+    }
+
+
+# =========================================================
 # 🚀 POST API → REGISTER PILOT
 # =========================================================
 @router.post("/register")
@@ -173,7 +238,7 @@ async def register_pilot(
         "updated_at": datetime.utcnow()
     }
 
-    # ✅ ONLY ADD IF EXISTS (IMPORTANT FIX)
+    # ✅ ONLY ADD IF EXISTS (FIX APPLIED)
     if small_license:
         new_pilot["small_license_number"] = small_license
 
