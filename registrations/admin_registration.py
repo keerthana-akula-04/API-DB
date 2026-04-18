@@ -9,7 +9,7 @@ router = APIRouter(prefix="/admin", tags=["Registrations"])
 
 
 # =========================================================
-# 📦 SCHEMA (Flexible for frontend)
+# 📦 SCHEMA
 # =========================================================
 class AdminRegisterRequest(BaseModel):
     client_name: str | None = None
@@ -30,6 +30,68 @@ class AdminRegisterRequest(BaseModel):
 
 
 # =========================================================
+# 🔹 GET API → DROPDOWN DATA
+# =========================================================
+@router.get("/data")
+async def get_admin_form_data(user=Depends(get_current_user)):
+
+    if user.get("role") not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    cols = get_collections()
+    clients_collection = cols["clients"]
+    projects_collection = cols["projects_client"]
+    industries_collection = cols["industries"]
+
+    clients = await clients_collection.find().to_list(None)
+    projects = await projects_collection.find().to_list(None)
+    industries = await industries_collection.find().to_list(None)
+
+    # 🔹 Industry map
+    industry_map = {
+        str(ind["_id"]): ind["industry_name"]
+        for ind in industries
+    }
+
+    # 🔹 Group clients
+    client_map = {}
+
+    for c in clients:
+        name = c["client_name"]
+
+        if name not in client_map:
+            client_map[name] = {"client_ids": []}
+
+        client_map[name]["client_ids"].append(c["_id"])
+
+    result = []
+
+    # 🔹 Map client → industries
+    for client_name, data in client_map.items():
+
+        industries_list = []
+
+        for p in projects:
+            if p["client_id"] in data["client_ids"]:
+
+                industry_id = str(p.get("industry_id"))
+                industry_name = industry_map.get(industry_id)
+
+                if industry_name:
+                    industries_list.append(industry_name)
+
+        result.append({
+            "Client Name": client_name,
+            "Industries": list(set(industries_list))
+        })
+
+    return {
+        "status": "success",
+        "data": result
+    }
+
+
+# =========================================================
 # 🚀 POST API → REGISTER ADMIN
 # =========================================================
 @router.post("/register")
@@ -45,16 +107,12 @@ async def register_admin(
 
     print("\n🟢 PARSED DATA:")
     print(data)
-
-    print("\n🟡 DICT DATA:")
-    print(data.dict())
     # ========================================
 
-    # 🔐 AUTH CHECK
     if user.get("role") not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # ❗ REQUIRED FIELD CHECK
+    # REQUIRED FIELD CHECK
     if not all([data.client_name, data.industry_name, data.name, data.email_id, data.password]):
         raise HTTPException(status_code=400, detail="All fields are required")
 
@@ -63,61 +121,43 @@ async def register_admin(
     projects_collection = cols["projects_client"]
     industries_collection = cols["industries"]
 
-    # =====================================================
     # 1. VALIDATE CLIENT
-    # =====================================================
     existing_client = await clients_collection.find_one({
         "client_name": data.client_name
     })
-
-    print("👉 existing_client:", existing_client)
 
     if not existing_client:
         raise HTTPException(400, "Invalid client name")
 
     client_code = existing_client["client_code"]
 
-    # =====================================================
     # 2. USER LIMIT
-    # =====================================================
     user_count = await clients_collection.count_documents({
         "client_code": client_code
     })
 
-    print("👉 user_count:", user_count)
-
     if user_count >= 10:
         raise HTTPException(400, "Maximum 10 users allowed for this client")
 
-    # =====================================================
     # 3. EMAIL CHECK
-    # =====================================================
     existing_user = await clients_collection.find_one({
         "email_id": data.email_id
     })
 
-    print("👉 existing_user:", existing_user)
-
     if existing_user:
         raise HTTPException(400, "Email already registered")
 
-    # =====================================================
-    # 4. INDUSTRY VALIDATION (ONLY VALIDATE, NOT STORE)
-    # =====================================================
+    # 4. INDUSTRY VALIDATION (ONLY VALIDATE)
     industry_doc = await industries_collection.find_one({
         "industry_name": data.industry_name
     })
-
-    print("👉 industry_doc:", industry_doc)
 
     if not industry_doc:
         raise HTTPException(400, "Invalid industry name")
 
     industry_id = industry_doc["_id"]
 
-    # =====================================================
     # 5. VALIDATE INDUSTRY ↔ CLIENT
-    # =====================================================
     client_records = await clients_collection.find({
         "client_name": data.client_name
     }).to_list(None)
@@ -129,8 +169,6 @@ async def register_admin(
         "client_id": {"$in": client_ids}
     })
 
-    print("👉 valid_project:", valid_project)
-
     if not valid_project:
         raise HTTPException(
             status_code=400,
@@ -138,37 +176,27 @@ async def register_admin(
         )
 
     # =====================================================
-    # ✅ INSERT ADMIN (STRICT — NO industry_name)
+    # ✅ INSERT ADMIN (STRICT)
     # =====================================================
     new_admin = {
         "admin_name": data.name,
-
         "client_code": client_code,
         "client_name": data.client_name,
-
-        # ❌ industry_name NOT stored
-
         "email_id": data.email_id,
         "password": data.password,  # ⚠️ hash in production
-
         "role": "admin",
         "status": "Active",
-
         "logo_path": existing_client.get("logo_path", ""),
-
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
 
-    print("\n🟣 FINAL DOCUMENT:")
-    print(new_admin)
+    print("🟣 FINAL DOCUMENT:", new_admin)
 
     result = await clients_collection.insert_one(new_admin)
 
-    print("✅ INSERTED ID:", result.inserted_id)
-
     # =====================================================
-    # ✅ RESPONSE (FRONTEND FORMAT)
+    # ✅ RESPONSE
     # =====================================================
     return {
         "status": "success",
