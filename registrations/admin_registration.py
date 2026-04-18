@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, root_validator
 from datetime import datetime
 
 from database import get_collections
@@ -9,58 +9,63 @@ router = APIRouter(prefix="/admin", tags=["Registrations"])
 
 
 # =========================================================
-# 📦 SCHEMA
+# 📦 SCHEMA (Flexible for frontend)
 # =========================================================
 class AdminRegisterRequest(BaseModel):
-    client_name: str = Field(alias="Client Name")
-    industry_name: str = Field(alias="Industry Name")
-    name: str = Field(alias="Name")
-    email_id: EmailStr = Field(alias="Email")
-    password: str = Field(alias="Password")
+    client_name: str | None = None
+    industry_name: str | None = None
+    name: str | None = None
+    email_id: EmailStr | None = None
+    password: str | None = None
 
-    class Config:
-        populate_by_name = True
+    @root_validator(pre=True)
+    def map_fields(cls, values):
+        return {
+            "client_name": values.get("Client Name") or values.get("client_name"),
+            "industry_name": values.get("Industry Name") or values.get("industry_name"),
+            "name": values.get("Name") or values.get("name"),
+            "email_id": values.get("Email") or values.get("email") or values.get("email_id"),
+            "password": values.get("Password") or values.get("password"),
+        }
 
 
 # =========================================================
-# 🚀 POST API → REGISTER ADMIN (WITH DEBUG LOGS)
+# 🚀 POST API → REGISTER ADMIN
 # =========================================================
 @router.post("/register")
 async def register_admin(
-    request: Request,   # 👈 to capture raw body
+    request: Request,
     data: AdminRegisterRequest,
     user=Depends(get_current_user)
 ):
 
-    # ================= DEBUG START =================
+    # ================= DEBUG =================
     print("\n🔴 RAW REQUEST BODY:")
-    raw_body = await request.body()
-    print(raw_body)
+    print(await request.body())
 
-    print("\n🟢 PARSED DATA (Pydantic):")
+    print("\n🟢 PARSED DATA:")
     print(data)
 
     print("\n🟡 DICT DATA:")
     print(data.dict())
+    # ========================================
 
-    print("\n🔵 USER INFO:")
-    print(user)
-    # ================= DEBUG END ===================
-
-
+    # 🔐 AUTH CHECK
     if user.get("role") not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    # ❗ REQUIRED FIELD CHECK
+    if not all([data.client_name, data.industry_name, data.name, data.email_id, data.password]):
+        raise HTTPException(status_code=400, detail="All fields are required")
 
     cols = get_collections()
     clients_collection = cols["clients"]
     projects_collection = cols["projects_client"]
     industries_collection = cols["industries"]
 
-    # ================= DEBUG =================
-    print("\n🔍 Checking client:", data.client_name)
-    # ========================================
-
+    # =====================================================
     # 1. VALIDATE CLIENT
+    # =====================================================
     existing_client = await clients_collection.find_one({
         "client_name": data.client_name
     })
@@ -72,11 +77,9 @@ async def register_admin(
 
     client_code = existing_client["client_code"]
 
-    # ================= DEBUG =================
-    print("👉 client_code:", client_code)
-    # ========================================
-
+    # =====================================================
     # 2. USER LIMIT
+    # =====================================================
     user_count = await clients_collection.count_documents({
         "client_code": client_code
     })
@@ -86,7 +89,9 @@ async def register_admin(
     if user_count >= 10:
         raise HTTPException(400, "Maximum 10 users allowed for this client")
 
+    # =====================================================
     # 3. EMAIL CHECK
+    # =====================================================
     existing_user = await clients_collection.find_one({
         "email_id": data.email_id
     })
@@ -96,7 +101,9 @@ async def register_admin(
     if existing_user:
         raise HTTPException(400, "Email already registered")
 
-    # 4. GET INDUSTRY ID
+    # =====================================================
+    # 4. INDUSTRY VALIDATION (ONLY VALIDATE, NOT STORE)
+    # =====================================================
     industry_doc = await industries_collection.find_one({
         "industry_name": data.industry_name
     })
@@ -108,18 +115,14 @@ async def register_admin(
 
     industry_id = industry_doc["_id"]
 
-    # ================= DEBUG =================
-    print("👉 industry_id:", industry_id)
-    # ========================================
-
+    # =====================================================
     # 5. VALIDATE INDUSTRY ↔ CLIENT
+    # =====================================================
     client_records = await clients_collection.find({
         "client_name": data.client_name
     }).to_list(None)
 
     client_ids = [c["_id"] for c in client_records]
-
-    print("👉 client_ids:", client_ids)
 
     valid_project = await projects_collection.find_one({
         "industry_id": industry_id,
@@ -135,17 +138,18 @@ async def register_admin(
         )
 
     # =====================================================
-    # ✅ INSERT ADMIN
+    # ✅ INSERT ADMIN (STRICT — NO industry_name)
     # =====================================================
     new_admin = {
         "admin_name": data.name,
 
         "client_code": client_code,
         "client_name": data.client_name,
-        "industry_name": data.industry_name,
+
+        # ❌ industry_name NOT stored
 
         "email_id": data.email_id,
-        "password": data.password,
+        "password": data.password,  # ⚠️ hash in production
 
         "role": "admin",
         "status": "Active",
@@ -156,7 +160,7 @@ async def register_admin(
         "updated_at": datetime.utcnow()
     }
 
-    print("\n🟣 FINAL DOCUMENT TO INSERT:")
+    print("\n🟣 FINAL DOCUMENT:")
     print(new_admin)
 
     result = await clients_collection.insert_one(new_admin)
@@ -164,7 +168,7 @@ async def register_admin(
     print("✅ INSERTED ID:", result.inserted_id)
 
     # =====================================================
-    # ✅ RESPONSE
+    # ✅ RESPONSE (FRONTEND FORMAT)
     # =====================================================
     return {
         "status": "success",
