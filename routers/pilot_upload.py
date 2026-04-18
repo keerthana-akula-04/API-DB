@@ -41,7 +41,7 @@ async def get_pilot_data(client_id: str = Query(None)):
                 "pilots": pilots
             }
 
-        # 🔹 Convert ID safely
+        # 🔹 Convert ID
         try:
             client_obj_id = ObjectId(client_id)
         except:
@@ -52,7 +52,7 @@ async def get_pilot_data(client_id: str = Query(None)):
         if not client:
             return {"status": False, "message": "Client not found"}
 
-        # 🔥 Handle ObjectId + string mismatch
+        # 🔹 Handle ObjectId + string mismatch
         project_data = await project_client_col.find_one({
             "$or": [
                 {"client_id": client_obj_id},
@@ -60,7 +60,7 @@ async def get_pilot_data(client_id: str = Query(None)):
             ]
         })
 
-        # 🔥 If NO mapping → still return pilot data (NO ERROR)
+        # 🔥 If no mapping → still return pilot data
         if not project_data:
             return {
                 "status": True,
@@ -76,13 +76,8 @@ async def get_pilot_data(client_id: str = Query(None)):
                     "deliverable_name": None,
 
                     "weather_conditions": [
-                        "Sunny",
-                        "Cloudy",
-                        "Partly Cloudy",
-                        "Rainy",
-                        "Windy",
-                        "Stormy",
-                        "Foggy"
+                        "Sunny", "Cloudy", "Partly Cloudy",
+                        "Rainy", "Windy", "Stormy", "Foggy"
                     ]
                 },
                 "message": "No project mapping found for this pilot"
@@ -107,7 +102,7 @@ async def get_pilot_data(client_id: str = Query(None)):
             "data": {
                 "pilot_name": client.get("pilot_name"),
                 "license_number": client.get("license_number"),
-                "email": client.get("email"),
+                "email": client.get("email_id"),
                 "contact_number": client.get("contact_number"),
 
                 "industry_name": industry.get("industry_name") if industry else None,
@@ -115,13 +110,8 @@ async def get_pilot_data(client_id: str = Query(None)):
                 "deliverable_name": deliverable.get("deliverable_name") if deliverable else None,
 
                 "weather_conditions": [
-                    "Sunny",
-                    "Cloudy",
-                    "Partly Cloudy",
-                    "Rainy",
-                    "Windy",
-                    "Stormy",
-                    "Foggy"
+                    "Sunny", "Cloudy", "Partly Cloudy",
+                    "Rainy", "Windy", "Stormy", "Foggy"
                 ]
             }
         }
@@ -181,7 +171,7 @@ async def submit_pilot_data(
         data = {
             "Pilot_name": client.get("pilot_name"),
             "License_number": client.get("license_number"),
-            "Email": client.get("email"),
+            "Email": client.get("email_id"),
             "Contact_number": client.get("contact_number"),
 
             "Client_ID": client_id,
