@@ -13,7 +13,7 @@ router = APIRouter(prefix="/admin", tags=["Registrations"])
 # 📦 SCHEMA
 # =========================================================
 class AdminRegisterRequest(BaseModel):
-    name: str   # ✅ UI field
+    name: str = Field(alias="Name") 
     client_name: str
     industry_name: str
     email_id: EmailStr
