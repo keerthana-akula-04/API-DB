@@ -9,7 +9,7 @@ router = APIRouter(prefix="/admin", tags=["Registrations"])
 
 
 # =========================================================
-# 📦 SCHEMA (NO ALIAS → FRONTEND FRIENDLY)
+# 📦 SCHEMA
 # =========================================================
 class AdminRegisterRequest(BaseModel):
     client_name: str
@@ -97,9 +97,7 @@ async def register_admin(
     projects_collection = cols["projects_client"]
     industries_collection = cols["industries"]
 
-    # =====================================================
     # 1. VALIDATE CLIENT
-    # =====================================================
     existing_client = await clients_collection.find_one({
         "client_name": data.client_name
     })
@@ -108,10 +106,10 @@ async def register_admin(
         raise HTTPException(400, "Invalid client name")
 
     client_code = existing_client["client_code"]
+    admin_name = existing_client.get("admin_name", "")  # Get from existing client
+    logo_path = existing_client.get("logo_path", "")    # Get from existing client
 
-    # =====================================================
     # 2. USER LIMIT
-    # =====================================================
     user_count = await clients_collection.count_documents({
         "client_code": client_code
     })
@@ -119,9 +117,7 @@ async def register_admin(
     if user_count >= 10:
         raise HTTPException(400, "Maximum 10 users allowed for this client")
 
-    # =====================================================
     # 3. EMAIL CHECK
-    # =====================================================
     existing_user = await clients_collection.find_one({
         "email_id": data.email_id
     })
@@ -129,9 +125,7 @@ async def register_admin(
     if existing_user:
         raise HTTPException(400, "Email already registered")
 
-    # =====================================================
     # 4. GET INDUSTRY ID
-    # =====================================================
     industry_doc = await industries_collection.find_one({
         "industry_name": data.industry_name
     })
@@ -141,9 +135,7 @@ async def register_admin(
 
     industry_id = industry_doc["_id"]
 
-    # =====================================================
     # 5. VALIDATE INDUSTRY ↔ CLIENT
-    # =====================================================
     client_records = await clients_collection.find({
         "client_name": data.client_name
     }).to_list(None)
@@ -162,29 +154,18 @@ async def register_admin(
         )
 
     # =====================================================
-    # 6. PASSWORD VALIDATION
-    # =====================================================
-    if len(data.password) < 6:
-        raise HTTPException(400, "Password must be at least 6 characters")
-
-    # =====================================================
-    # 7. INSERT ADMIN
+    # ✅ INSERT ADMIN (with industry_name, admin_name, logo_path)
     # =====================================================
     new_admin = {
         "client_code": client_code,
         "client_name": data.client_name,
-
+        "industry_name": data.industry_name,
         "email_id": data.email_id,
         "password": data.password,
-
         "role": "admin",
         "status": "Active",
-
-        "admin_name": data.client_name,
-        "admin_contact_number": "",
-
-        "logo_path": existing_client.get("logo_path", ""),
-
+        "admin_name": admin_name,
+        "logo_path": logo_path,
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
@@ -198,6 +179,8 @@ async def register_admin(
             "adminId": str(result.inserted_id),
             "clientName": data.client_name,
             "industryName": data.industry_name,
+            "adminName": admin_name,
+            "logoPath": logo_path,
             "email": data.email_id
         }
     }
