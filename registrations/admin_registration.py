@@ -1,23 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 
 from database import get_collections
 from auth.dependencies import get_current_user
-# from utils.security import hash_password  # (recommended)
+# from utils.security import hash_password  # recommended
 
 router = APIRouter(prefix="/admin", tags=["Registrations"])
 
 
 # =========================================================
-# 📦 SCHEMA
+# 📦 SCHEMA (FRONTEND → BACKEND MAPPING)
 # =========================================================
 class AdminRegisterRequest(BaseModel):
-    name: str = Field(alias="Name") 
-    client_name: str
-    industry_name: str
-    email_id: EmailStr
-    password: str
+    client_name: str = Field(alias="Client Name")
+    industry_name: str = Field(alias="Industry Name")
+    name: str = Field(alias="Name")
+    email_id: EmailStr = Field(alias="Email")
+    password: str = Field(alias="Password")
+
+    class Config:
+        populate_by_name = True
 
 
 # =========================================================
@@ -72,8 +75,8 @@ async def get_admin_form_data(user=Depends(get_current_user)):
                     industries_list.append(industry_name)
 
         result.append({
-            "client_name": client_name,
-            "industries": list(set(industries_list))
+            "Client Name": client_name,
+            "Industries": list(set(industries_list))
         })
 
     return {
@@ -157,13 +160,14 @@ async def register_admin(
     # ✅ INSERT ADMIN
     # =====================================================
     new_admin = {
-        "admin_name": data.name,   # ✅ mapped field
+        "admin_name": data.name,   # mapped from "Name"
 
         "client_code": client_code,
         "client_name": data.client_name,
+        "industry_name": data.industry_name,
 
         "email_id": data.email_id,
-        "password": data.password,  # ⚠️ use hash_password in production
+        "password": data.password,   # ⚠️ hash in production
 
         "role": "admin",
         "status": "Active",
@@ -177,16 +181,16 @@ async def register_admin(
     result = await clients_collection.insert_one(new_admin)
 
     # =====================================================
-    # ✅ RESPONSE (AS PER YOUR REQUIREMENT)
+    # ✅ RESPONSE (FRONTEND FORMAT)
     # =====================================================
     return {
         "status": "success",
         "message": "Admin registered successfully",
         "data": {
-            "client_name": data.client_name,
-            "industry_name": data.industry_name,
-            "Name": data.name,                 # ✅ UI format
-            "email_id": data.email_id,
-            "password": data.password          # ⚠️ not recommended
+            "Client Name": data.client_name,
+            "Industry Name": data.industry_name,
+            "Name": data.name,
+            "Email": data.email_id
+            # ❌ Don't return password
         }
     }
