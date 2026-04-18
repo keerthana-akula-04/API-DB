@@ -1,6 +1,6 @@
-import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
@@ -34,7 +34,6 @@ async def close_mongo_connection():
 def get_db():
     if db is None:
         raise Exception("DB not initialized")
-
     return db
 
 
@@ -42,7 +41,7 @@ def get_collections():
     db_instance = get_db()
 
     return {
-        "pilot": db_instance["Pilot"],  # ✅ important
+        "pilot": db_instance["Pilot"],
         "clients": db_instance["clients"],
         "industries": db_instance["industries"],
         "projects_master": db_instance["projects_master"],

@@ -1,12 +1,14 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from datetime import datetime
-from database import db
+from database import get_collections
 import cloudinary
 import cloudinary.uploader
 
 router = APIRouter()
 
 ALLOWED_ROLES = ["super_admin", "admin", "user", "pilot"]
+
+# ---------------- CLOUDINARY CONFIG ---------------- #
 
 cloudinary.config(
     cloud_name="your_cloud_name",
@@ -61,7 +63,7 @@ def build_project_doc(project_name, location_name, location_url, industry_id, nu
     return {
         "project_code": f"PRJ_{number:02d}",
         "project_name": project_name,
-        "project_image_path": uploaded_files[0] if uploaded_files else "",  # ✅ FIX
+        "project_image_path": uploaded_files[0] if uploaded_files else "",
         "location_name": location_name,
         "location_url": location_url,
         "industry_id": industry_id,
@@ -85,14 +87,16 @@ def build_deliverable_doc(deliverable_name, project_id, industry_id, number):
 
 # ---------------- HELPERS ---------------- #
 
-def get_next_sequence(collection, field_prefix):
-    last = collection.find_one({}, sort=[(field_prefix, -1)])
+async def get_next_sequence(collection, field_prefix):
+    last = await collection.find_one({}, sort=[(field_prefix, -1)])
     number = 1
+
     if last:
         try:
             number = int(last[field_prefix].split("_")[1]) + 1
         except:
             number = 1
+
     return number
 
 
@@ -105,33 +109,34 @@ async def upload_to_cloudinary(file: UploadFile, folder: str):
     return result["secure_url"]
 
 
-# ---------------- GET API (RESTORED) ---------------- #
+# ---------------- GET API (UPDATED) ---------------- #
 
 @router.get("/add-new")
-def get_add_new():
+async def get_add_new():
 
-    clients = list(db.clients.find({}, {"_id": 0, "client_name": 1}))
-    industries = list(db.industries.find({}, {"_id": 0, "industry_name": 1}))
-    deliverables = list(db.deliverables.find({}, {"_id": 0, "deliverable_name": 1}))
+    collections = get_collections()
 
-    projects_master = list(
-        db.projects_master.find(
-            {},
-            {
-                "_id": 0,
-                "project_name": 1,
-                "location_name": 1,
-                "location_url": 1
-            }
-        )
-    )
+    # ✅ DISTINCT → NO DUPLICATES
+    clients = await collections["clients"].distinct("client_name")
+    industries = await collections["industries"].distinct("industry_name")
+    deliverables = await collections["deliverables"].distinct("deliverable_name")
+
+    projects_master = await collections["projects_master"].find(
+        {},
+        {
+            "_id": 0,
+            "project_name": 1,
+            "location_name": 1,
+            "location_url": 1
+        }
+    ).to_list(length=None)
 
     return {
         "status": "success",
         "data": {
-            "clients": [c["client_name"] for c in clients],
-            "industries": [i["industry_name"] for i in industries],
-            "deliverables": [d["deliverable_name"] for d in deliverables],
+            "clients": clients,
+            "industries": industries,
+            "deliverables": deliverables,
             "projects_master": projects_master
         }
     }
@@ -154,13 +159,16 @@ async def add_new_project(
     files: list[UploadFile] = File(...)
 ):
 
-    # VALIDATION
+    collections = get_collections()
+
+    # VALIDATIONS
     validate_role(role)
     validate_email(email_id)
     validate_logo(logo)
 
     # UNIQUE EMAIL CHECK
-    if db.clients.find_one({"email_id": email_id}):
+    existing = await collections["clients"].find_one({"email_id": email_id})
+    if existing:
         raise HTTPException(status_code=409, detail="Email already exists")
 
     # UPLOAD LOGO
@@ -176,25 +184,30 @@ async def add_new_project(
         uploaded_files.append(file_url)
 
     # CLIENT INSERT
-    client_number = get_next_sequence(db.clients, "client_code")
-    client_result = db.clients.insert_one(
+    client_number = await get_next_sequence(collections["clients"], "client_code")
+    client_result = await collections["clients"].insert_one(
         build_client_doc(client_name, email_id, password, role, logo_url, client_number)
     )
     client_id = client_result.inserted_id
 
     # INDUSTRY
-    industry = db.industries.find_one({"industry_name": industry_name})
+    industry = await collections["industries"].find_one({"industry_name": industry_name})
+
     if not industry:
-        result = db.industries.insert_one(build_industry_doc(industry_name))
+        result = await collections["industries"].insert_one(
+            build_industry_doc(industry_name)
+        )
         industry_id = result.inserted_id
     else:
         industry_id = industry["_id"]
 
     # PROJECT
-    project = db.projects_master.find_one({"project_name": project_name})
+    project = await collections["projects_master"].find_one({"project_name": project_name})
+
     if not project:
-        number = get_next_sequence(db.projects_master, "project_code")
-        result = db.projects_master.insert_one(
+        number = await get_next_sequence(collections["projects_master"], "project_code")
+
+        result = await collections["projects_master"].insert_one(
             build_project_doc(
                 project_name,
                 location_name,
@@ -209,11 +222,14 @@ async def add_new_project(
         project_id = project["_id"]
 
     # DELIVERABLE
-    deliverable = db.deliverables.find_one({"deliverable_name": deliverable_name})
+    deliverable = await collections["deliverables"].find_one(
+        {"deliverable_name": deliverable_name}
+    )
 
     if not deliverable:
-        number = get_next_sequence(db.deliverables, "deliverable_code")
-        result = db.deliverables.insert_one(
+        number = await get_next_sequence(collections["deliverables"], "deliverable_code")
+
+        result = await collections["deliverables"].insert_one(
             build_deliverable_doc(
                 deliverable_name,
                 project_id,
@@ -225,8 +241,8 @@ async def add_new_project(
     else:
         deliverable_id = deliverable["_id"]
 
-    # ✅ INSERT INTO projects_client
-    db.projects_client.insert_one({
+    # FINAL LINKING
+    await collections["projects_client"].insert_one({
         "client_id": client_id,
         "project_id": project_id,
         "industry_id": industry_id,
