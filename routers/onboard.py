@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from datetime import datetime
+from typing import List, Optional
 from database import get_collections
 import cloudinary
 import cloudinary.uploader
@@ -29,7 +30,7 @@ def validate_email(email: str):
 
 
 def validate_logo(logo: UploadFile):
-    if not logo.filename.lower().endswith((".jpg", ".jpeg", ".png")):
+    if logo and not logo.filename.lower().endswith((".jpg", ".jpeg", ".png")):
         raise HTTPException(status_code=400, detail="Logo must be JPG/PNG")
 
 
@@ -109,14 +110,13 @@ async def upload_to_cloudinary(file: UploadFile, folder: str):
     return result["secure_url"]
 
 
-# ---------------- GET API (UPDATED) ---------------- #
+# ---------------- GET API ---------------- #
 
 @router.get("/add-new")
 async def get_add_new():
 
     collections = get_collections()
 
-    # ✅ DISTINCT → NO DUPLICATES
     clients = await collections["clients"].distinct("client_name")
     industries = await collections["industries"].distinct("industry_name")
     deliverables = await collections["deliverables"].distinct("deliverable_name")
@@ -147,34 +147,62 @@ async def get_add_new():
 @router.post("/add-new")
 async def add_new_project(
     client_name: str = Form(...),
-    email_id: str = Form(...),
-    password: str = Form(...),
-    role: str = Form(...),
+
+    email_id: Optional[str] = Form(None),
+    password: Optional[str] = Form(None),
+    role: Optional[str] = Form(None),
+
     industry_name: str = Form(...),
     deliverable_name: str = Form(...),
     project_name: str = Form(...),
     location_name: str = Form(...),
     location_url: str = Form(...),
-    logo: UploadFile = File(...),
-    files: list[UploadFile] = File(...)
+
+    logo: Optional[UploadFile] = File(None),
+    files: List[UploadFile] = File(default=[])
 ):
 
     collections = get_collections()
 
-    # VALIDATIONS
-    validate_role(role)
-    validate_email(email_id)
-    validate_logo(logo)
+    # ---------------- CHECK CLIENT ---------------- #
+    existing_client = await collections["clients"].find_one({
+        "client_name": client_name
+    })
 
-    # UNIQUE EMAIL CHECK
-    existing = await collections["clients"].find_one({"email_id": email_id})
-    if existing:
-        raise HTTPException(status_code=409, detail="Email already exists")
+    # ---------------- NEW CLIENT ---------------- #
+    if not existing_client:
 
-    # UPLOAD LOGO
-    logo_url = await upload_to_cloudinary(logo, "add_new/logos")
+        if not email_id or not password or not role:
+            raise HTTPException(
+                status_code=400,
+                detail="email_id, password and role are required for new client"
+            )
 
-    # UPLOAD FILES
+        validate_role(role)
+        validate_email(email_id)
+
+        existing_email = await collections["clients"].find_one({"email_id": email_id})
+        if existing_email:
+            raise HTTPException(status_code=409, detail="Email already exists")
+
+        validate_logo(logo)
+
+        logo_url = None
+        if logo:
+            logo_url = await upload_to_cloudinary(logo, "add_new/logos")
+
+        client_number = await get_next_sequence(collections["clients"], "client_code")
+
+        client_result = await collections["clients"].insert_one(
+            build_client_doc(client_name, email_id, password, role, logo_url, client_number)
+        )
+        client_id = client_result.inserted_id
+
+    # ---------------- EXISTING CLIENT ---------------- #
+    else:
+        client_id = existing_client["_id"]
+
+    # ---------------- UPLOAD PROJECT FILES ---------------- #
     uploaded_files = []
     for file in files:
         file_url = await upload_to_cloudinary(
@@ -183,14 +211,7 @@ async def add_new_project(
         )
         uploaded_files.append(file_url)
 
-    # CLIENT INSERT
-    client_number = await get_next_sequence(collections["clients"], "client_code")
-    client_result = await collections["clients"].insert_one(
-        build_client_doc(client_name, email_id, password, role, logo_url, client_number)
-    )
-    client_id = client_result.inserted_id
-
-    # INDUSTRY
+    # ---------------- INDUSTRY ---------------- #
     industry = await collections["industries"].find_one({"industry_name": industry_name})
 
     if not industry:
@@ -201,7 +222,7 @@ async def add_new_project(
     else:
         industry_id = industry["_id"]
 
-    # PROJECT
+    # ---------------- PROJECT ---------------- #
     project = await collections["projects_master"].find_one({"project_name": project_name})
 
     if not project:
@@ -221,7 +242,7 @@ async def add_new_project(
     else:
         project_id = project["_id"]
 
-    # DELIVERABLE
+    # ---------------- DELIVERABLE ---------------- #
     deliverable = await collections["deliverables"].find_one(
         {"deliverable_name": deliverable_name}
     )
@@ -241,7 +262,7 @@ async def add_new_project(
     else:
         deliverable_id = deliverable["_id"]
 
-    # FINAL LINKING
+    # ---------------- FINAL LINK ---------------- #
     await collections["projects_client"].insert_one({
         "client_id": client_id,
         "project_id": project_id,

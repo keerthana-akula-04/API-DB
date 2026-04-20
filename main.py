@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from routers import dashboard
 from database import connect_to_mongo, close_mongo_connection
 from auth.auth_routes import router as auth_router
-from routers import add_new
+from routers import onboard
 from sqlite_db import engine
 from auth.sqlite_session_model import Base
 from routers.pilot_upload import router as pilot_router
@@ -58,7 +58,7 @@ app.include_router(analytics.router)
 app.include_router(projects.router)
 app.include_router(alerts.router)
 app.include_router(admins.router)
-app.include_router(add_new.router)
+app.include_router(onboard.router)
 app.include_router(pilot_router)
 app.include_router(users.router)
 app.include_router(admin_registration.router)
